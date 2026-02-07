@@ -35,6 +35,12 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The app needs **persistent storage** in production. Vercel’s serverless environment has no writable disk, so events are stored in **Upstash Redis**.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Deploy the app to [Vercel](https://vercel.com/new).
+2. In the Vercel project, go to **Storage** (or **Integrations**) and add **Upstash Redis** (create a database if needed).
+3. Vercel will set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for you. Redeploy so the new env vars are used.
+
+If those env vars are missing, “Find a time” will return an error and the UI will show the message from the server (e.g. to configure Upstash Redis).
+
+**Local dev:** Without Redis env vars, the app uses a local `data/events.json` file so you can run and test locally without setting up Redis.
