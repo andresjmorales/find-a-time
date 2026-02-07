@@ -62,6 +62,7 @@ export default function Home() {
           dates,
           startHour,
           endHour,
+          eventTimezone: creatorTimezone || undefined,
         }),
       });
 

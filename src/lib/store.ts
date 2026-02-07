@@ -94,7 +94,8 @@ export async function addAvailability(
   participantName: string,
   slots: string[],
   slotsPrefer: string[] = [],
-  timezone?: string
+  timezone?: string,
+  otherAvailabilityNote?: string
 ): Promise<EventWithAvailability | null> {
   const events = await readEvents();
   const event = events[eventId];
@@ -108,6 +109,8 @@ export async function addAvailability(
     timezone,
     slots,
     slotsPrefer: slotsPrefer?.length ? slotsPrefer : undefined,
+    otherAvailabilityNote:
+      otherAvailabilityNote?.trim() || undefined,
   });
   await writeEvents(events);
   return event;

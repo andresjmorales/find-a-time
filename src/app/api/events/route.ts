@@ -5,7 +5,7 @@ import { EventWithAvailability } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { name, dates, startHour, endHour } = body;
+  const { name, dates, startHour, endHour, eventTimezone } = body;
 
   if (!name || !dates?.length || startHour == null || endHour == null) {
     return NextResponse.json(
@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
     dates: dates.sort(),
     startHour,
     endHour,
+    eventTimezone: eventTimezone || undefined,
     createdAt: new Date().toISOString(),
     availability: [],
   };
