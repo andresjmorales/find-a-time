@@ -6,11 +6,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const event = getEvent(id);
-
-  if (!event) {
-    return NextResponse.json({ error: "Event not found" }, { status: 404 });
+  try {
+    const event = await getEvent(id);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+    return NextResponse.json(event);
+  } catch (err) {
+    console.error("Get event failed:", err);
+    return NextResponse.json(
+      { error: "Storage unavailable. Configure Upstash Redis for production." },
+      { status: 503 }
+    );
   }
-
-  return NextResponse.json(event);
 }

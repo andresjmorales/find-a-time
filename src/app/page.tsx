@@ -65,10 +65,13 @@ export default function Home() {
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to create event");
-
-      const event = await res.json();
-      router.push(`/event/${event.id}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data.error as string) || "Something went wrong. Please try again.");
+        setLoading(false);
+        return;
+      }
+      router.push(`/event/${data.id}`);
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);

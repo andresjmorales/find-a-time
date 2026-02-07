@@ -24,7 +24,17 @@ export async function POST(request: NextRequest) {
     availability: [],
   };
 
-  createEvent(event);
-
-  return NextResponse.json(event, { status: 201 });
+  try {
+    await createEvent(event);
+    return NextResponse.json(event, { status: 201 });
+  } catch (err) {
+    console.error("Create event failed:", err);
+    return NextResponse.json(
+      {
+        error:
+          "Storage unavailable. Add Upstash Redis (Storage) to your Vercel project and set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
+      },
+      { status: 503 }
+    );
+  }
 }

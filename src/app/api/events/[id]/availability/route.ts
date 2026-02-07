@@ -16,11 +16,23 @@ export async function POST(
     );
   }
 
-  const event = addAvailability(id, participantName, slots, slotsPrefer ?? [], timezone);
-
-  if (!event) {
-    return NextResponse.json({ error: "Event not found" }, { status: 404 });
+  try {
+    const event = await addAvailability(
+      id,
+      participantName,
+      slots,
+      slotsPrefer ?? [],
+      timezone
+    );
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+    return NextResponse.json(event);
+  } catch (err) {
+    console.error("Add availability failed:", err);
+    return NextResponse.json(
+      { error: "Storage unavailable. Configure Upstash Redis for production." },
+      { status: 503 }
+    );
   }
-
-  return NextResponse.json(event);
 }
