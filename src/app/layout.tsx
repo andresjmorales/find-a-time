@@ -13,15 +13,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-gray-50 min-h-screen font-sans">
-        <header className="bg-white border-b border-gray-200">
-          <div className="max-w-4xl mx-auto px-4 py-4">
-            <a href="/" className="text-xl font-bold text-emerald-600">
-              Find a Time
+      <body className="bg-slate-50 min-h-screen font-sans antialiased">
+        <header className="bg-white/90 backdrop-blur border-b border-slate-200 sticky top-0 z-10">
+          <div className="max-w-4xl mx-auto px-4 py-3">
+            <a
+              href="/"
+              className="text-lg font-bold text-violet-600 hover:text-violet-700 transition-colors"
+            >
+              Find a time
             </a>
           </div>
         </header>
-        <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>
+        <main className="max-w-4xl mx-auto px-4 py-6 sm:py-8">{children}</main>
       </body>
     </html>
   );

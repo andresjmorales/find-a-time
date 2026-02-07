@@ -42,17 +42,23 @@ export function getEvent(id: string): EventWithAvailability | null {
 export function addAvailability(
   eventId: string,
   participantName: string,
-  slots: string[]
+  slots: string[],
+  slotsPrefer: string[] = [],
+  timezone?: string
 ): EventWithAvailability | null {
   const events = readEvents();
   const event = events[eventId];
   if (!event) return null;
 
-  // Remove existing availability for this participant, then add new
   event.availability = event.availability.filter(
     (a) => a.participantName !== participantName
   );
-  event.availability.push({ participantName, slots });
+  event.availability.push({
+    participantName,
+    timezone,
+    slots,
+    slotsPrefer: slotsPrefer?.length ? slotsPrefer : undefined,
+  });
   writeEvents(events);
   return event;
 }

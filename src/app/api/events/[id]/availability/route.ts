@@ -7,16 +7,16 @@ export async function POST(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const { participantName, slots } = body;
+  const { participantName, timezone, slots, slotsPrefer } = body;
 
-  if (!participantName || !slots) {
+  if (!participantName || !Array.isArray(slots)) {
     return NextResponse.json(
       { error: "Missing required fields" },
       { status: 400 }
     );
   }
 
-  const event = addAvailability(id, participantName, slots);
+  const event = addAvailability(id, participantName, slots, slotsPrefer ?? [], timezone);
 
   if (!event) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });

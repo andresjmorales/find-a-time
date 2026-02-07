@@ -9,7 +9,9 @@ export interface Event {
 
 export interface Availability {
   participantName: string;
-  slots: string[]; // "2025-03-15T14:00" format
+  timezone?: string; // e.g. "America/New_York"
+  slots: string[]; // "2025-03-15T14:00" — great (green)
+  slotsPrefer?: string[]; // if needed (yellow); unselected = unavailable (red)
 }
 
 export interface EventWithAvailability extends Event {

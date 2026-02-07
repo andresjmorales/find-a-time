@@ -5,6 +5,13 @@ import { useParams } from "next/navigation";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 import { EventWithAvailability } from "@/lib/types";
 
+function getDefaultTimezone(): string {
+  if (typeof Intl !== "undefined" && Intl.DateTimeFormat) {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  }
+  return "UTC";
+}
+
 export default function EventPage() {
   const params = useParams();
   const id = params.id as string;
@@ -14,12 +21,18 @@ export default function EventPage() {
   const [error, setError] = useState("");
 
   const [participantName, setParticipantName] = useState("");
-  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+  const [timezone, setTimezone] = useState("");
+  const [slotsGreat, setSlotsGreat] = useState<string[]>([]);
+  const [slotsPrefer, setSlotsPrefer] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const [tab, setTab] = useState<"respond" | "results">("respond");
+
+  useEffect(() => {
+    setTimezone(getDefaultTimezone());
+  }, []);
 
   const fetchEvent = useCallback(async () => {
     try {
@@ -53,7 +66,9 @@ export default function EventPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           participantName: participantName.trim(),
-          slots: selectedSlots,
+          timezone: timezone || undefined,
+          slots: slotsGreat,
+          slotsPrefer: slotsPrefer.length ? slotsPrefer : undefined,
         }),
       });
 
@@ -78,7 +93,7 @@ export default function EventPage() {
 
   if (loading) {
     return (
-      <div className="text-center py-20 text-gray-500">Loading event...</div>
+      <div className="text-center py-20 text-slate-500">Loading event…</div>
     );
   }
 
@@ -86,8 +101,8 @@ export default function EventPage() {
     return (
       <div className="text-center py-20">
         <p className="text-red-500 mb-4">{error}</p>
-        <a href="/" className="text-emerald-600 hover:underline">
-          Create a new event
+        <a href="/" className="text-violet-600 hover:underline">
+          Find a time
         </a>
       </div>
     );
@@ -96,105 +111,130 @@ export default function EventPage() {
   if (!event) return null;
 
   return (
-    <div>
+    <div className="max-w-4xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">{event.name}</h1>
-        <p className="text-gray-500 text-sm">
-          {event.dates.length} day{event.dates.length !== 1 ? "s" : ""} &middot;{" "}
-          {formatHour(event.startHour)} - {formatHour(event.endHour)}
+        <h1 className="text-2xl font-bold text-slate-900 mb-1">{event.name}</h1>
+        <p className="text-slate-500 text-sm">
+          {event.dates.length} day{event.dates.length !== 1 ? "s" : ""} ·{" "}
+          {formatHour(event.startHour)} – {formatHour(event.endHour)}
           {event.availability.length > 0 && (
-            <> &middot; {event.availability.length} response{event.availability.length !== 1 ? "s" : ""}</>
+            <> · {event.availability.length} response{event.availability.length !== 1 ? "s" : ""}</>
           )}
         </p>
       </div>
 
-      {/* Share link */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-        <div className="flex items-center gap-3">
-          <p className="text-sm text-gray-600 flex-1">
+      {/* Share link — one tap copy */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-6">
+        <div className="flex items-center gap-3 flex-wrap">
+          <p className="text-sm text-slate-600 flex-1 min-w-0">
             Share this link so others can add their availability:
           </p>
           <button
             onClick={copyLink}
-            className="px-4 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-gray-700"
+            className="px-4 py-2.5 text-sm font-medium bg-violet-600 text-white rounded-xl hover:bg-violet-700 transition-colors shrink-0"
           >
-            {copied ? "Copied!" : "Copy Link"}
+            {copied ? "Copied!" : "Copy link"}
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1">
+      <div className="flex gap-1 mb-6 bg-slate-100 rounded-xl p-1">
         <button
           onClick={() => setTab("respond")}
-          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+          className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-colors ${
             tab === "respond"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
+              ? "bg-white text-slate-900 shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
           }`}
         >
-          Add Your Availability
+          Add your availability
         </button>
         <button
           onClick={() => setTab("results")}
-          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+          className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-colors ${
             tab === "results"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
+              ? "bg-white text-slate-900 shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
           }`}
         >
-          Group Results
+          Group results
         </button>
       </div>
 
       {tab === "respond" && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           {submitted ? (
             <div className="text-center py-8">
-              <div className="text-4xl mb-3">&#10003;</div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                Availability submitted!
+              <div className="text-4xl mb-3">✓</div>
+              <h2 className="text-xl font-semibold text-slate-900 mb-2">
+                Availability submitted
               </h2>
-              <p className="text-gray-500 mb-4">
-                Your availability has been saved as {participantName}.
+              <p className="text-slate-500 mb-4">
+                Saved as <strong>{participantName}</strong>.
               </p>
               <button
                 onClick={() => {
                   setSubmitted(false);
                   setParticipantName("");
-                  setSelectedSlots([]);
+                  setSlotsGreat([]);
+                  setSlotsPrefer([]);
                 }}
-                className="text-emerald-600 hover:underline text-sm"
+                className="text-violet-600 hover:underline text-sm"
               >
-                Submit as a different person
+                Submit as someone else
               </button>
             </div>
           ) : (
             <>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Your Name
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Your name
                 </label>
                 <input
                   type="text"
                   value={participantName}
                   onChange={(e) => setParticipantName(e.target.value)}
                   placeholder="Enter your name"
-                  className="w-full max-w-xs px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-gray-900"
+                  className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
                 />
               </div>
 
-              <p className="text-sm text-gray-500 mb-4">
-                Click and drag to select the times you&apos;re available:
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Your time zone
+                </label>
+                <input
+                  type="text"
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  placeholder="e.g. America/New_York"
+                  className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Pre-filled from your device; change if needed.
+                </p>
+              </div>
+
+              <p className="text-sm text-slate-600 mb-3">
+                Click or drag to mark times: <strong>Great</strong>,{" "}
+                <strong>If needed</strong>, or <strong>Unavailable</strong>.
               </p>
 
               <AvailabilityGrid
                 dates={event.dates}
                 startHour={event.startHour}
                 endHour={event.endHour}
-                selectedSlots={selectedSlots}
-                onSlotsChange={setSelectedSlots}
+                slotsGreat={slotsGreat}
+                slotsPrefer={slotsPrefer}
+                onSlotsChange={({ great, prefer }) => {
+                  setSlotsGreat(great);
+                  setSlotsPrefer(prefer);
+                }}
                 mode="input"
+                othersAvailability={event.availability.map((a) => ({
+                  slots: a.slots,
+                  slotsPrefer: a.slotsPrefer,
+                }))}
               />
 
               {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
@@ -202,9 +242,9 @@ export default function EventPage() {
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="mt-6 px-6 py-3 bg-emerald-500 text-white font-semibold rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                className="mt-6 px-6 py-3 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 transition-colors disabled:opacity-50"
               >
-                {submitting ? "Submitting..." : "Submit Availability"}
+                {submitting ? "Submitting…" : "Submit availability"}
               </button>
             </>
           )}
@@ -212,21 +252,28 @@ export default function EventPage() {
       )}
 
       {tab === "results" && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           {event.availability.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <p>No responses yet. Share the link to get started!</p>
+            <div className="text-center py-8 text-slate-500">
+              <p>No responses yet. Share the link to get started.</p>
             </div>
           ) : (
             <>
               <div className="mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-1">
-                  Group Availability
+                <h2 className="text-lg font-semibold text-slate-900 mb-1">
+                  Group availability
                 </h2>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-slate-500">
                   {event.availability.length} response
                   {event.availability.length !== 1 ? "s" : ""}:{" "}
-                  {event.availability.map((a) => a.participantName).join(", ")}
+                  {event.availability
+                    .map(
+                      (a) =>
+                        a.timezone
+                          ? `${a.participantName} (${a.timezone})`
+                          : a.participantName
+                    )
+                    .join(", ")}
                 </p>
               </div>
 
