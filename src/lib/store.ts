@@ -5,11 +5,25 @@ import { EventWithAvailability } from "./types";
 
 const STORAGE_KEY = "find-a-time:events";
 
+/** Supports both Upstash (UPSTASH_*) and Vercel KV (KV_REST_API_*) env names */
 function useRedis(): boolean {
   return !!(
-    process.env.UPSTASH_REDIS_REST_URL &&
-    process.env.UPSTASH_REDIS_REST_TOKEN
+    (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) ||
+    (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)
   );
+}
+
+function getRedis(): Redis {
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return Redis.fromEnv();
+  }
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    return new Redis({
+      url: process.env.KV_REST_API_URL,
+      token: process.env.KV_REST_API_TOKEN,
+    });
+  }
+  throw new Error("Redis env vars not set");
 }
 
 // --- File store (local dev when Redis not configured) ---
@@ -40,7 +54,7 @@ function writeEventsSync(events: Record<string, EventWithAvailability>) {
 
 async function readEvents(): Promise<Record<string, EventWithAvailability>> {
   if (useRedis()) {
-    const redis = Redis.fromEnv();
+    const redis = getRedis();
     const raw = await redis.get<string>(STORAGE_KEY);
     if (raw == null) return {};
     return typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -52,7 +66,7 @@ async function writeEvents(
   events: Record<string, EventWithAvailability>
 ): Promise<void> {
   if (useRedis()) {
-    const redis = Redis.fromEnv();
+    const redis = getRedis();
     await redis.set(STORAGE_KEY, JSON.stringify(events));
     return;
   }

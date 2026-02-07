@@ -39,7 +39,7 @@ The app needs **persistent storage** in production. Vercel’s serverless enviro
 
 1. Deploy the app to [Vercel](https://vercel.com/new).
 2. In the Vercel project, go to **Storage** (or **Integrations**) and add **Upstash Redis** (create a database if needed).
-3. Vercel will set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for you. Redeploy so the new env vars are used.
+3. After you **Connect to Project**, Vercel may set either `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` or `KV_REST_API_URL`/`KV_REST_API_TOKEN`. The app supports both. Redeploy so the new env vars are used.
 
 If those env vars are missing, “Find a time” will return an error and the UI will show the message from the server (e.g. to configure Upstash Redis).
 
