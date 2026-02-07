@@ -74,12 +74,21 @@ export default function AvailabilityGrid(props: Props) {
       return { great, prefer };
     }
 
-    function getSlotParticipants(slot: string): string[] {
-      return p.availability
-        .filter(
-          (a) => a.slots.includes(slot) || a.slotsPrefer?.includes(slot)
-        )
-        .map((a) => a.participantName);
+    function getSlotTooltipNames(slot: string): {
+      great: string[];
+      prefer: string[];
+      unavailable: string[];
+    } {
+      const great: string[] = [];
+      const prefer: string[] = [];
+      for (const a of p.availability) {
+        if (a.slots.includes(slot)) great.push(a.participantName);
+        else if (a.slotsPrefer?.includes(slot)) prefer.push(a.participantName);
+      }
+      const unavailable = p.availability
+        .map((a) => a.participantName)
+        .filter((n) => !great.includes(n) && !prefer.includes(n));
+      return { great, prefer, unavailable };
     }
 
     function getHeatColor(great: number, prefer: number): string {
@@ -122,22 +131,41 @@ export default function AvailabilityGrid(props: Props) {
                 {dates.map((date) => {
                   const slot = slotKey(date, hour, half);
                   const { great, prefer } = getSlotScore(slot);
-                  const participants = getSlotParticipants(slot);
+                  const { great: greatNames, prefer: preferNames, unavailable: unavailableNames } =
+                    getSlotTooltipNames(slot);
+                  const hasAny =
+                    greatNames.length || preferNames.length || unavailableNames.length;
                   return (
                     <div
                       key={slot}
                       className={`h-6 border border-slate-200 ${getHeatColor(great, prefer)} transition-colors cursor-default group relative`}
-                      title={
-                        participants.length > 0
-                          ? `${great} great, ${prefer} if needed: ${participants.join(", ")}`
-                          : "No one available"
-                      }
                     >
-                      {participants.length > 0 && (
-                        <div className="hidden group-hover:block absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white text-xs rounded whitespace-nowrap">
-                          {participants.join(", ")}
-                        </div>
-                      )}
+                      <div className="hidden group-hover:block absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2.5 py-2 bg-slate-800 text-white text-xs rounded shadow-lg text-left w-[max(180px,40ch)]">
+                        {hasAny ? (
+                          <>
+                            {greatNames.length > 0 && (
+                              <p className="mb-1.5 last:mb-0">
+                                <span className="font-semibold text-slate-200">Great:</span>{" "}
+                                <span className="text-white">{greatNames.join(", ")}</span>
+                              </p>
+                            )}
+                            {preferNames.length > 0 && (
+                              <p className="mb-1.5 last:mb-0">
+                                <span className="font-semibold text-slate-200">If Needed:</span>{" "}
+                                <span className="text-white">{preferNames.join(", ")}</span>
+                              </p>
+                            )}
+                            {unavailableNames.length > 0 && (
+                              <p className="mb-0">
+                                <span className="font-semibold text-slate-200">Unavailable:</span>{" "}
+                                <span className="text-white">{unavailableNames.join(", ")}</span>
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="mb-0">No one available</p>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

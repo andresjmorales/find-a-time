@@ -7,7 +7,7 @@ export async function POST(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const { participantName, timezone, slots, slotsPrefer } = body;
+  const { participantName, timezone, slots, slotsPrefer, otherAvailabilityNote } = body;
 
   if (!participantName || !Array.isArray(slots)) {
     return NextResponse.json(
@@ -22,7 +22,8 @@ export async function POST(
       participantName,
       slots,
       slotsPrefer ?? [],
-      timezone
+      timezone,
+      otherAvailabilityNote
     );
     if (!event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });

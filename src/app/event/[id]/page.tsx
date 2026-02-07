@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 import { EventWithAvailability } from "@/lib/types";
+import { getTimezoneOptions } from "@/lib/timezones";
 
 function getDefaultTimezone(): string {
   if (typeof Intl !== "undefined" && Intl.DateTimeFormat) {
@@ -21,7 +22,8 @@ export default function EventPage() {
   const [error, setError] = useState("");
 
   const [participantName, setParticipantName] = useState("");
-  const [timezone, setTimezone] = useState("");
+  const [timezone, setTimezone] = useState(() => getDefaultTimezone());
+  const [otherAvailabilityNote, setOtherAvailabilityNote] = useState("");
   const [slotsGreat, setSlotsGreat] = useState<string[]>([]);
   const [slotsPrefer, setSlotsPrefer] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -29,10 +31,10 @@ export default function EventPage() {
   const [copied, setCopied] = useState(false);
 
   const [tab, setTab] = useState<"respond" | "results">("respond");
-
-  useEffect(() => {
-    setTimezone(getDefaultTimezone());
-  }, []);
+  const timezoneOptions = useMemo(
+    () => getTimezoneOptions(timezone),
+    [timezone]
+  );
 
   const fetchEvent = useCallback(async () => {
     try {
@@ -69,6 +71,7 @@ export default function EventPage() {
           timezone: timezone || undefined,
           slots: slotsGreat,
           slotsPrefer: slotsPrefer.length ? slotsPrefer : undefined,
+          otherAvailabilityNote: otherAvailabilityNote.trim() || undefined,
         }),
       });
 
@@ -117,6 +120,9 @@ export default function EventPage() {
         <p className="text-slate-500 text-sm">
           {event.dates.length} day{event.dates.length !== 1 ? "s" : ""} ·{" "}
           {formatHour(event.startHour)} – {formatHour(event.endHour)}
+          {event.eventTimezone && (
+            <> · Times in <span className="font-medium text-slate-600">{event.eventTimezone}</span></>
+          )}
           {event.availability.length > 0 && (
             <> · {event.availability.length} response{event.availability.length !== 1 ? "s" : ""}</>
           )}
@@ -176,6 +182,7 @@ export default function EventPage() {
                 onClick={() => {
                   setSubmitted(false);
                   setParticipantName("");
+                  setOtherAvailabilityNote("");
                   setSlotsGreat([]);
                   setSlotsPrefer([]);
                 }}
@@ -203,15 +210,19 @@ export default function EventPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Your time zone
                 </label>
-                <input
-                  type="text"
+                <select
                   value={timezone}
                   onChange={(e) => setTimezone(e.target.value)}
-                  placeholder="e.g. America/New_York"
-                  className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
-                />
+                  className="w-full max-w-md px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
+                >
+                  {timezoneOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-xs text-slate-500 mt-1">
-                  Pre-filled from your device; change if needed.
+                  Grid times are in event timezone{event.eventTimezone ? ` (${event.eventTimezone})` : ""}. Your selection is stored in that same timezone.
                 </p>
               </div>
 
@@ -236,6 +247,22 @@ export default function EventPage() {
                   slotsPrefer: a.slotsPrefer,
                 }))}
               />
+
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Other availability <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={otherAvailabilityNote}
+                  onChange={(e) => setOtherAvailabilityNote(e.target.value)}
+                  placeholder="e.g. Friday 2–4pm my time, if that doesn't fit the grid"
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  If some of your available times don’t align to the grid above, note them here. They’ll show at the bottom of Group results.
+                </p>
+              </div>
 
               {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
 
@@ -284,6 +311,22 @@ export default function EventPage() {
                 availability={event.availability}
                 mode="view"
               />
+
+              {event.availability.some((a) => a.otherAvailabilityNote) && (
+                <div className="mt-6 pt-4 border-t border-slate-200">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Other availability</h3>
+                  <ul className="text-sm text-slate-600 space-y-1">
+                    {event.availability
+                      .filter((a) => a.otherAvailabilityNote)
+                      .map((a) => (
+                        <li key={a.participantName}>
+                          <strong>{a.participantName}</strong>
+                          {a.timezone ? ` (${a.timezone})` : ""} had other availability: {a.otherAvailabilityNote}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
             </>
           )}
         </div>
