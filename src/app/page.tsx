@@ -170,7 +170,7 @@ export default function Home() {
         disabled={loading}
         className="w-full py-4 px-6 bg-violet-600 text-white text-lg font-semibold rounded-2xl shadow-lg shadow-violet-600/25 hover:bg-violet-700 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? "Creating…" : "Find a time!"}
+        {loading ? "Creating…" : "Let's find a time!"}
       </button>
     </div>
   );

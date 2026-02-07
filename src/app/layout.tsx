@@ -20,7 +20,7 @@ export default function RootLayout({
               href="/"
               className="text-lg font-bold text-violet-600 hover:text-violet-700 transition-colors"
             >
-              Find a time
+              Find a Time
             </a>
           </div>
         </header>
