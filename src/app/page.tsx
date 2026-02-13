@@ -145,7 +145,7 @@ export default function Home() {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Team standup"
+          placeholder="e.g. Meet at the dog park"
           className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
         />
       </div>
