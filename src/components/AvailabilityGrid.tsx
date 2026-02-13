@@ -426,6 +426,7 @@ export default function AvailabilityGrid(props: Props) {
   const handleTouchStart = useCallback(
     (e: React.TouchEvent) => {
       if (e.touches.length !== 1) return;
+      didTouchPaintRef.current = false; // allow this touch to start a new paint when long-press fires
       if (touchLongPressTimerRef.current) {
         clearTimeout(touchLongPressTimerRef.current);
         touchLongPressTimerRef.current = null;
