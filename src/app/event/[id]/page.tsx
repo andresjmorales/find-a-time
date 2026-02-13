@@ -343,19 +343,6 @@ export default function EventPage() {
             <>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Your name
-                </label>
-                <input
-                  type="text"
-                  value={participantName}
-                  onChange={(e) => setParticipantName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
-                />
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Your time zone
                 </label>
                 <select
@@ -416,6 +403,19 @@ export default function EventPage() {
                   If some of your available times don’t align to the grid above, note them here.
                   They’ll show at the bottom of Group results.
                 </p>
+              </div>
+
+              <div className="mt-6 mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Your name
+                </label>
+                <input
+                  type="text"
+                  value={participantName}
+                  onChange={(e) => setParticipantName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
+                />
               </div>
 
               {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
