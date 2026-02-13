@@ -207,13 +207,14 @@ export default function AvailabilityGrid(props: Props) {
     }
 
     return (
-      <div ref={viewGridRef} className="overflow-x-auto">
-        <div
-          className="inline-grid gap-0 pt-3"
-          style={{
-            gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
-          }}
-        >
+      <div>
+        <div ref={viewGridRef} className="overflow-x-auto">
+          <div
+            className="inline-grid gap-0 pt-3"
+            style={{
+              gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
+            }}
+          >
           <div className="sticky left-0 z-10 bg-white" />
           {dates.map((date) => (
             <div
@@ -303,8 +304,8 @@ export default function AvailabilityGrid(props: Props) {
               )}
             </Fragment>
           ))}
+          </div>
         </div>
-
         {totalParticipants > 0 && (
           <div className="flex items-center gap-3 mt-4 text-xs text-slate-600 flex-wrap">
             <span>Availability:</span>
@@ -320,7 +321,7 @@ export default function AvailabilityGrid(props: Props) {
                     "linear-gradient(90deg, rgb(250, 204, 21) 0%, rgb(22, 163, 74) 100%)",
                 }}
               />
-              worse ⟶ better
+              worse ➜ better
             </span>
           </div>
         )}
@@ -466,16 +467,8 @@ export default function AvailabilityGrid(props: Props) {
   );
 
   return (
-    <div
-      ref={inputGridRef}
-      className="overflow-x-auto select-none"
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
-    >
-      {/* Paint mode toolbar */}
+    <div className="select-none">
+      {/* Paint mode toolbar — outside scroll so it stays anchored when grid scrolls horizontally */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <span className="text-sm text-slate-600">Mark as:</span>
         {(
@@ -512,7 +505,16 @@ export default function AvailabilityGrid(props: Props) {
       </div>
 
       <div
-        className="inline-grid gap-0 pt-4"
+        ref={inputGridRef}
+        className="overflow-x-auto"
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
+        <div
+          className="inline-grid gap-0 pt-4"
         style={{
           gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
         }}
@@ -578,6 +580,7 @@ export default function AvailabilityGrid(props: Props) {
             )}
           </Fragment>
         ))}
+        </div>
       </div>
       {othersCount > 0 && (
         <p className="mt-2 text-xs text-slate-500">
