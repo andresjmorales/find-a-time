@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import "./globals.css";
+import logo from "./icon.png";
 
 export const metadata: Metadata = {
-  title: "Find a Time",
+  title: "Let's Find a Time!",
   description: "Find the best time for everyone to meet",
 };
 
@@ -18,9 +20,17 @@ export default function RootLayout({
           <div className="max-w-4xl mx-auto px-4 py-3">
             <a
               href="/"
-              className="text-lg font-bold text-violet-600 hover:text-violet-700 transition-colors"
+              className="flex items-center gap-2 text-lg font-bold text-violet-600 hover:text-violet-700 transition-colors"
             >
-              Find a Time
+              <Image
+                src={logo}
+                alt=""
+                width={logo.width}
+                height={logo.height}
+                className="h-12 w-12 shrink-0 object-contain"
+                aria-hidden
+              />
+              Let's Find a Time!
             </a>
           </div>
         </header>

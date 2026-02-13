@@ -7,7 +7,8 @@ export async function POST(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const { participantName, timezone, slots, slotsPrefer, otherAvailabilityNote } = body;
+  const { participantName, timezone, slots, slotsIfNeeded, slotsPrefer, otherAvailabilityNote } = body;
+  const ifNeeded = Array.isArray(slotsIfNeeded) ? slotsIfNeeded : Array.isArray(slotsPrefer) ? slotsPrefer : [];
 
   if (!participantName || !Array.isArray(slots)) {
     return NextResponse.json(
@@ -21,7 +22,7 @@ export async function POST(
       id,
       participantName,
       slots,
-      slotsPrefer ?? [],
+      ifNeeded,
       timezone,
       otherAvailabilityNote
     );
