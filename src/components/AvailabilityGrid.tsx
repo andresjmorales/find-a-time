@@ -228,10 +228,15 @@ export default function AvailabilityGrid(props: Props) {
           {hours.map((hour, hourIndex) => (
             <Fragment key={hour}>
               <div
-                className="sticky left-0 z-10 bg-white text-right pr-3 text-xs text-slate-500 flex items-center justify-end col-start-1 min-h-0"
+                className="sticky left-0 z-10 bg-white col-start-1 min-h-0 relative"
                 style={{ gridRow: `${2 + hourIndex * 2} / span 2` }}
               >
-                {formatHour(hour)}
+                <span
+                  className="absolute right-3 top-0 text-xs text-slate-500"
+                  style={{ transform: "translateY(-0.5rem)" }}
+                >
+                  {formatHour(hour)}
+                </span>
               </div>
               {[0, 1].map((half) =>
                 dates.map((date) => {
@@ -532,10 +537,15 @@ export default function AvailabilityGrid(props: Props) {
         {hours.map((hour, hourIndex) => (
           <Fragment key={hour}>
             <div
-              className="sticky left-0 z-10 bg-white text-right pr-3 text-xs text-slate-500 flex items-center justify-end col-start-1 min-h-0"
+              className="sticky left-0 z-10 bg-white col-start-1 min-h-0 relative"
               style={{ gridRow: `${2 + hourIndex * 2} / span 2` }}
             >
-              {formatHour(hour)}
+              <span
+                className="absolute right-3 top-0 text-xs text-slate-500"
+                style={{ transform: "translateY(-0.5rem)" }}
+              >
+                {formatHour(hour)}
+              </span>
             </div>
             {[0, 1].map((half) =>
               dates.map((date) => {
