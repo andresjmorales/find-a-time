@@ -161,6 +161,16 @@ export default function EventPage() {
     fetchEvent();
   }, [fetchEvent]);
 
+  // Keep tab title in sync when event loads (e.g. after client fetch)
+  useEffect(() => {
+    if (!event?.name) return;
+    const title = `Let's Find a Time! — ${event.name}`;
+    document.title = title;
+    return () => {
+      document.title = "Let's Find a Time!";
+    };
+  }, [event?.name]);
+
   const topSlots = useReactMemo(
     () => (event ? computeTopSlots(event) : []),
     [event]
