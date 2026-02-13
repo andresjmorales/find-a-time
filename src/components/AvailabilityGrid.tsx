@@ -152,17 +152,16 @@ export default function AvailabilityGrid(props: Props) {
             </div>
           ))}
 
-          {hours.map((hour) =>
-            [0, 1].map((half) => (
-              <Fragment key={`row-${hour}-${half}`}>
-                <div
-                  className={`sticky left-0 z-10 bg-white text-right pr-3 text-xs text-slate-500 flex items-center justify-end h-6 ${
-                    half === 0 ? "-mt-3" : ""
-                  }`}
-                >
-                  {half === 0 ? formatHour(hour) : ""}
-                </div>
-                {dates.map((date) => {
+          {hours.map((hour, hourIndex) => (
+            <Fragment key={hour}>
+              <div
+                className="sticky left-0 z-10 bg-white text-right pr-3 text-xs text-slate-500 flex items-center justify-end col-start-1 min-h-0"
+                style={{ gridRow: `${2 + hourIndex * 2} / span 2` }}
+              >
+                {formatHour(hour)}
+              </div>
+              {[0, 1].map((half) =>
+                dates.map((date) => {
                   const slot = slotKey(date, hour, half);
                   const { great, ifNeeded } = getSlotCounts(slot);
                   const score = scoreCache.get(slot);
@@ -211,10 +210,10 @@ export default function AvailabilityGrid(props: Props) {
                       </div>
                     </div>
                   );
-                })}
-              </Fragment>
-            ))
-          )}
+                })
+              )}
+            </Fragment>
+          ))}
         </div>
 
         {totalParticipants > 0 && (
@@ -372,7 +371,7 @@ export default function AvailabilityGrid(props: Props) {
       </div>
 
       <div
-        className="inline-grid gap-0 relative pt-4"
+        className="inline-grid gap-0 pt-4"
         style={{
           gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
         }}
@@ -387,17 +386,16 @@ export default function AvailabilityGrid(props: Props) {
           </div>
         ))}
 
-        {hours.map((hour) =>
-          [0, 1].map((half) => (
-            <Fragment key={`row-${hour}-${half}`}>
-              <div
-                className={`sticky left-0 z-10 bg-white text-right pr-3 text-xs text-slate-500 flex items-center justify-end h-8 ${
-                  half === 0 ? "-mt-4" : ""
-                }`}
-              >
-                {half === 0 ? formatHour(hour) : ""}
-              </div>
-              {dates.map((date) => {
+        {hours.map((hour, hourIndex) => (
+          <Fragment key={hour}>
+            <div
+              className="sticky left-0 z-10 bg-white text-right pr-3 text-xs text-slate-500 flex items-center justify-end col-start-1 min-h-0"
+              style={{ gridRow: `${2 + hourIndex * 2} / span 2` }}
+            >
+              {formatHour(hour)}
+            </div>
+            {[0, 1].map((half) =>
+              dates.map((date) => {
                 const slot = slotKey(date, hour, half);
                 const great = inGreat(slot);
                 const ifNeeded = inIfNeeded(slot);
@@ -434,10 +432,10 @@ export default function AvailabilityGrid(props: Props) {
                     />
                   </div>
                 );
-              })}
-            </Fragment>
-          ))
-        )}
+              })
+            )}
+          </Fragment>
+        ))}
       </div>
       {othersCount > 0 && (
         <p className="mt-2 text-xs text-slate-500">
