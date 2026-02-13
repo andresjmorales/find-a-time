@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useCallback, useRef } from "react";
+import { Fragment, useState, useCallback, useRef, useEffect } from "react";
 import { getSlotScoreValue } from "@/lib/scoring";
 
 export type SlotMark = "great" | "ifNeeded" | "unavailable";
@@ -55,6 +55,78 @@ export default function AvailabilityGrid(props: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const [paintAs, setPaintAs] = useState<SlotMark>("great");
   const dragApplyRef = useRef<SlotMark>("great");
+
+  // View mode: tap-to-show tooltip (for touch devices where hover doesn't work)
+  const [activeTooltipSlot, setActiveTooltipSlot] = useState<string | null>(null);
+  const viewGridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (mode !== "view") return;
+    const close = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (viewGridRef.current && !viewGridRef.current.contains(target)) {
+        setActiveTooltipSlot(null);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("touchstart", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("touchstart", close);
+    };
+  }, [mode]);
+
+  // Input mode: long-press then drag to paint on touch (avoids conflicting with scroll)
+  const touchLongPressTimerRef = useRef<number | null>(null);
+  const touchPaintActiveRef = useRef(false);
+  const touchIdentifierRef = useRef<number | null>(null);
+  const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
+  const lastPaintedSlotRef = useRef<string | null>(null);
+  const didTouchPaintRef = useRef(false); // skip next synthetic click after touch-paint
+  const inputGridRef = useRef<HTMLDivElement>(null);
+  const paintHandlersRef = useRef<{
+    handleMouseDown: (slot: string) => void;
+    handleMouseEnter: (slot: string) => void;
+    handleMouseUp: () => void;
+  } | null>(null);
+
+  function getSlotFromPoint(clientX: number, clientY: number): string | null {
+    const el = document.elementFromPoint(clientX, clientY);
+    const cell = el?.closest?.("[data-slot]");
+    return cell?.getAttribute("data-slot") ?? null;
+  }
+
+  // touchmove with passive: false so we can preventDefault when painting (input mode only)
+  useEffect(() => {
+    if (mode !== "input") return;
+    const el = inputGridRef.current;
+    if (!el) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      if (touch.identifier !== touchIdentifierRef.current) return;
+
+      if (touchLongPressTimerRef.current != null) {
+        const dx = touch.clientX - touchStartXRef.current;
+        const dy = touch.clientY - touchStartYRef.current;
+        if (dx * dx + dy * dy > 100) {
+          clearTimeout(touchLongPressTimerRef.current);
+          touchLongPressTimerRef.current = null;
+        }
+        return;
+      }
+      if (touchPaintActiveRef.current) {
+        e.preventDefault();
+        const slot = getSlotFromPoint(touch.clientX, touch.clientY);
+        if (slot && slot !== lastPaintedSlotRef.current) {
+          lastPaintedSlotRef.current = slot;
+          paintHandlersRef.current?.handleMouseEnter(slot);
+        }
+      }
+    };
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onTouchMove);
+  }, [mode]);
 
   const hours: number[] = [];
   for (let h = startHour; h < endHour; h++) {
@@ -135,7 +207,7 @@ export default function AvailabilityGrid(props: Props) {
     }
 
     return (
-      <div className="overflow-x-auto">
+      <div ref={viewGridRef} className="overflow-x-auto">
         <div
           className="inline-grid gap-0 pt-3"
           style={{
@@ -175,12 +247,29 @@ export default function AvailabilityGrid(props: Props) {
                   return (
                     <div
                       key={slot}
+                      data-slot={slot}
+                      role="button"
+                      tabIndex={0}
                       className={`h-6 border border-slate-200 transition-colors cursor-default group relative ${
                         isEmpty ? "bg-slate-50" : ""
                       }`}
                       style={heatColor ? { backgroundColor: heatColor } : undefined}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveTooltipSlot((prev) => (prev === slot ? null : slot));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setActiveTooltipSlot((prev) => (prev === slot ? null : slot));
+                        }
+                      }}
                     >
-                      <div className="hidden group-hover:block absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2.5 py-2 bg-slate-800 text-white text-xs rounded shadow-lg text-left w-[max(180px,40ch)]">
+                      <div
+                        className={`absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2.5 py-2 bg-slate-800 text-white text-xs rounded shadow-lg text-left w-[max(180px,40ch)] pointer-events-none ${
+                          activeTooltipSlot === slot ? "block" : "hidden group-hover:block"
+                        }`}
+                      >
                         {hasAny ? (
                           <>
                             {greatNames.length > 0 && (
@@ -256,6 +345,10 @@ export default function AvailabilityGrid(props: Props) {
 
   const handleMouseDown = useCallback(
     (slot: string) => {
+      if (didTouchPaintRef.current) {
+        didTouchPaintRef.current = false;
+        return;
+      }
       setIsDragging(true);
       dragApplyRef.current = paintAs;
 
@@ -324,15 +417,62 @@ export default function AvailabilityGrid(props: Props) {
     setIsDragging(false);
   }, []);
 
+  paintHandlersRef.current = { handleMouseDown, handleMouseEnter, handleMouseUp };
+
   const inGreat = (slot: string) => p.slotsGreat.includes(slot);
   const inIfNeeded = (slot: string) => p.slotsIfNeeded.includes(slot);
   const othersCount = others.length;
 
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      if (touchLongPressTimerRef.current) {
+        clearTimeout(touchLongPressTimerRef.current);
+        touchLongPressTimerRef.current = null;
+      }
+      const touch = e.touches[0];
+      touchIdentifierRef.current = touch.identifier;
+      touchStartXRef.current = touch.clientX;
+      touchStartYRef.current = touch.clientY;
+      lastPaintedSlotRef.current = null;
+      touchLongPressTimerRef.current = window.setTimeout(() => {
+        touchLongPressTimerRef.current = null;
+        touchPaintActiveRef.current = true;
+        const slot = getSlotFromPoint(touchStartXRef.current, touchStartYRef.current);
+        if (slot) paintHandlersRef.current?.handleMouseDown(slot);
+      }, 1000) as unknown as number;
+    },
+    []
+  );
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const ended = Array.from(e.changedTouches).find(
+        (t) => t.identifier === touchIdentifierRef.current
+      );
+      if (!ended) return;
+      if (touchLongPressTimerRef.current) {
+        clearTimeout(touchLongPressTimerRef.current);
+        touchLongPressTimerRef.current = null;
+      }
+      if (touchPaintActiveRef.current) didTouchPaintRef.current = true;
+      touchPaintActiveRef.current = false;
+      lastPaintedSlotRef.current = null;
+      touchIdentifierRef.current = null;
+      paintHandlersRef.current?.handleMouseUp();
+    },
+    []
+  );
+
   return (
     <div
+      ref={inputGridRef}
       className="overflow-x-auto select-none"
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
       {/* Paint mode toolbar */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -408,6 +548,7 @@ export default function AvailabilityGrid(props: Props) {
                 return (
                   <div
                     key={slot}
+                    data-slot={slot}
                     className="relative h-8 border border-slate-200 cursor-pointer transition-colors overflow-hidden"
                     onMouseDown={() => handleMouseDown(slot)}
                     onMouseEnter={() => handleMouseEnter(slot)}
