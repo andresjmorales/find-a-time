@@ -10,7 +10,17 @@ function generateShortId(): string {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { name, dates, startHour, endHour, eventTimezone } = body;
+  const {
+    name,
+    dates,
+    startHour,
+    endHour,
+    eventTimezone,
+    disableIfNeeded,
+    ifNeededWeight,
+    expiresAt,
+    hideResultsUntilExpiration,
+  } = body;
 
   if (!name || !dates?.length || startHour == null || endHour == null) {
     return NextResponse.json(
@@ -34,6 +44,13 @@ export async function POST(request: NextRequest) {
     eventTimezone: eventTimezone || undefined,
     createdAt: new Date().toISOString(),
     availability: [],
+    disableIfNeeded: !!disableIfNeeded,
+    ifNeededWeight:
+      ifNeededWeight != null
+        ? Math.max(0, Math.min(1, Number(ifNeededWeight)))
+        : undefined,
+    expiresAt: expiresAt && String(expiresAt).trim() ? String(expiresAt).trim() : undefined,
+    hideResultsUntilExpiration: !!hideResultsUntilExpiration,
   };
 
   try {

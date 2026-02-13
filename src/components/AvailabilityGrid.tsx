@@ -1,7 +1,11 @@
 "use client";
 
-import { Fragment, useState, useCallback, useRef, useEffect } from "react";
-import { getSlotScoreValue } from "@/lib/scoring";
+import { Fragment, useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
+import { getSlotScoreValue, DEFAULT_IF_NEEDED_WEIGHT } from "@/lib/scoring";
+
+const TOOLTIP_MAX_WIDTH = 280;
+const TOOLTIP_MIN_WIDTH = 120;
 
 export type SlotMark = "great" | "ifNeeded" | "unavailable";
 
@@ -15,6 +19,10 @@ interface AvailabilityGridInputProps {
   mode: "input";
   /** Other participants' availability to show as overlay underneath */
   othersAvailability?: { slots: string[]; slotsIfNeeded?: string[] }[];
+  /** When true, only Great / Unavailable are shown; "If needed" is hidden. */
+  disableIfNeeded?: boolean;
+  /** Weight for "If needed" in scoring (0–1). Only used for tooltip when If needed is enabled. */
+  ifNeededWeight?: number;
 }
 
 interface GroupAvailabilityGridProps {
@@ -27,6 +35,10 @@ interface GroupAvailabilityGridProps {
     slotsIfNeeded?: string[];
   }[];
   mode: "view";
+  /** When true, "If needed" slots are not counted in score (weight 0). */
+  disableIfNeeded?: boolean;
+  /** Weight for "If needed" in scoring: 0–1, default 0.75. */
+  ifNeededWeight?: number;
 }
 
 type Props = AvailabilityGridInputProps | GroupAvailabilityGridProps;
@@ -58,13 +70,22 @@ export default function AvailabilityGrid(props: Props) {
 
   // View mode: tap-to-show tooltip (for touch devices where hover doesn't work)
   const [activeTooltipSlot, setActiveTooltipSlot] = useState<string | null>(null);
+  const [tooltipAnchorRect, setTooltipAnchorRect] = useState<DOMRect | null>(null);
   const viewGridRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
+  // Input mode: scoring info tooltip (portal, viewport-aware)
+  const scoringInfoRef = useRef<HTMLElement>(null);
+  const scoringInfoTooltipRef = useRef<HTMLDivElement>(null);
+  const [scoringInfoVisible, setScoringInfoVisible] = useState(false);
+  const [scoringInfoAnchorRect, setScoringInfoAnchorRect] = useState<DOMRect | null>(null);
   useEffect(() => {
     if (mode !== "view") return;
     const close = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
       if (viewGridRef.current && !viewGridRef.current.contains(target)) {
         setActiveTooltipSlot(null);
+        setTooltipAnchorRect(null);
       }
     };
     document.addEventListener("mousedown", close);
@@ -74,6 +95,78 @@ export default function AvailabilityGrid(props: Props) {
       document.removeEventListener("touchstart", close);
     };
   }, [mode]);
+
+  // Close scoring info tooltip when clicking outside (including touch)
+  useEffect(() => {
+    if (!scoringInfoVisible) return;
+    const close = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (scoringInfoRef.current && !scoringInfoRef.current.contains(target)) {
+        setScoringInfoVisible(false);
+        setScoringInfoAnchorRect(null);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("touchstart", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("touchstart", close);
+    };
+  }, [scoringInfoVisible]);
+
+  // Hide tooltip when grid scrolls (cell moves, tooltip would be misaligned)
+  useEffect(() => {
+    if (mode !== "view" || !activeTooltipSlot) return;
+    const el = viewGridRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      setActiveTooltipSlot(null);
+      setTooltipAnchorRect(null);
+    };
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [mode, activeTooltipSlot]);
+
+  // Nudge tooltip to stay within grid container (not viewport margins)
+  useLayoutEffect(() => {
+    if (mode !== "view" || !activeTooltipSlot || !tooltipRef.current || !viewGridRef.current) return;
+    const el = tooltipRef.current;
+    const gridRect = viewGridRef.current.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    const pad = 8;
+    if (r.left < gridRect.left + pad) {
+      el.style.left = `${gridRect.left + pad}px`;
+      el.style.transform = "none";
+    } else if (r.right > gridRect.right - pad) {
+      el.style.left = `${gridRect.right - el.offsetWidth - pad}px`;
+      el.style.transform = "none";
+    }
+  }, [mode, activeTooltipSlot, tooltipAnchorRect]);
+
+  // Nudge scoring info tooltip to stay within viewport (away from edges)
+  useLayoutEffect(() => {
+    if (!scoringInfoVisible || !scoringInfoTooltipRef.current) return;
+    const el = scoringInfoTooltipRef.current;
+    const r = el.getBoundingClientRect();
+    const pad = 16;
+    if (r.left < pad) {
+      el.style.left = `${pad}px`;
+      el.style.transform = "none";
+    } else if (r.right > window.innerWidth - pad) {
+      el.style.left = `${window.innerWidth - el.offsetWidth - pad}px`;
+      el.style.transform = "none";
+    }
+  }, [scoringInfoVisible, scoringInfoAnchorRect]);
+
+  function showTooltip(slot: string, cell: HTMLElement) {
+    setActiveTooltipSlot(slot);
+    setTooltipAnchorRect(cell.getBoundingClientRect());
+  }
+
+  function hideTooltip() {
+    setActiveTooltipSlot(null);
+    setTooltipAnchorRect(null);
+  }
 
   // Input mode: long-press then drag to paint on touch (avoids conflicting with scroll)
   const touchLongPressTimerRef = useRef<number | null>(null);
@@ -169,13 +262,15 @@ export default function AvailabilityGrid(props: Props) {
     let minScore = Number.POSITIVE_INFINITY;
     let maxScore = 0;
 
+    const weight =
+      p.disableIfNeeded ? 0 : (p.ifNeededWeight ?? DEFAULT_IF_NEEDED_WEIGHT);
     for (const date of dates) {
       for (const hour of hours) {
         for (const half of [0, 1] as const) {
           const slot = slotKey(date, hour, half);
           const { great, ifNeeded } = getSlotCounts(slot);
           if (great === 0 && ifNeeded === 0) continue;
-          const score = getSlotScoreValue(great, ifNeeded);
+          const score = getSlotScoreValue(great, ifNeeded, weight);
           scoreCache.set(slot, score);
           if (score < minScore) minScore = score;
           if (score > maxScore) maxScore = score;
@@ -249,6 +344,7 @@ export default function AvailabilityGrid(props: Props) {
                     greatNames.length || ifNeededNames.length || unavailableNames.length;
                   const heatColor = getHeatColor(score);
                   const isEmpty = !hasAny;
+                  const isActive = activeTooltipSlot === slot;
 
                   return (
                     <div
@@ -262,47 +358,23 @@ export default function AvailabilityGrid(props: Props) {
                       style={heatColor ? { backgroundColor: heatColor } : undefined}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setActiveTooltipSlot((prev) => (prev === slot ? null : slot));
+                        if (isActive) hideTooltip();
+                        else showTooltip(slot, e.currentTarget as HTMLElement);
                       }}
+                      onMouseEnter={(e) => showTooltip(slot, e.currentTarget as HTMLElement)}
+                      onMouseLeave={hideTooltip}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          setActiveTooltipSlot((prev) => (prev === slot ? null : slot));
+                          if (isActive) hideTooltip();
+                          else {
+                            const el = (e.target as HTMLElement).closest("[data-slot]") as HTMLElement;
+                            if (el) showTooltip(slot, el);
+                          }
                         }
                       }}
                     >
-                      <div
-                        className={`absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2.5 py-2 bg-slate-800 text-white text-xs rounded shadow-lg text-left w-[max(180px,40ch)] pointer-events-none ${
-                          activeTooltipSlot === slot ? "block" : "hidden group-hover:block"
-                        }`}
-                      >
-                        {hasAny ? (
-                          <>
-                            {greatNames.length > 0 && (
-                              <p className="mb-1.5 last:mb-0">
-                                <span className="font-semibold text-slate-200">Great:</span>{" "}
-                                <span className="text-white">{greatNames.join(", ")}</span>
-                              </p>
-                            )}
-                            {ifNeededNames.length > 0 && (
-                              <p className="mb-1.5 last:mb-0">
-                                <span className="font-semibold text-slate-200">If needed:</span>{" "}
-                                <span className="text-white">{ifNeededNames.join(", ")}</span>
-                              </p>
-                            )}
-                            {unavailableNames.length > 0 && (
-                              <p className="mb-0">
-                                <span className="font-semibold text-slate-200">Unavailable:</span>{" "}
-                                <span className="text-white">
-                                  {unavailableNames.join(", ")}
-                                </span>
-                              </p>
-                            )}
-                          </>
-                        ) : (
-                          <p className="mb-0">No one available</p>
-                        )}
-                      </div>
+                      {/* Tooltip content rendered in portal below */}
                     </div>
                   );
                 })
@@ -330,6 +402,64 @@ export default function AvailabilityGrid(props: Props) {
             </span>
           </div>
         )}
+
+        {activeTooltipSlot &&
+          tooltipAnchorRect &&
+          typeof document !== "undefined" &&
+          createPortal(
+            (() => {
+              const rect = tooltipAnchorRect;
+              const cellCenter = rect.left + rect.width / 2;
+              const bottom = window.innerHeight - rect.top + 4;
+              const gridWidth = viewGridRef.current?.getBoundingClientRect().width ?? Infinity;
+
+              const { great: greatNames, ifNeeded: ifNeededNames, unavailable: unavailableNames } =
+                getSlotTooltipNames(activeTooltipSlot);
+              const hasAny =
+                greatNames.length || ifNeededNames.length || unavailableNames.length;
+
+              return (
+                <div
+                  ref={tooltipRef}
+                  className="fixed z-50 px-2.5 py-2 bg-slate-800 text-white text-xs rounded shadow-lg text-left pointer-events-none"
+                  style={{
+                    left: cellCenter,
+                    bottom,
+                    transform: "translateX(-50%)",
+                    width: "max-content",
+                    minWidth: TOOLTIP_MIN_WIDTH,
+                    maxWidth: Math.min(TOOLTIP_MAX_WIDTH, gridWidth - 16, window.innerWidth - 16),
+                  }}
+                >
+                  {hasAny ? (
+                    <>
+                      {greatNames.length > 0 && (
+                        <p className="mb-1.5 last:mb-0">
+                          <span className="font-semibold text-slate-200">Great:</span>{" "}
+                          <span className="text-white">{greatNames.join(", ")}</span>
+                        </p>
+                      )}
+                      {ifNeededNames.length > 0 && (
+                        <p className="mb-1.5 last:mb-0">
+                          <span className="font-semibold text-slate-200">If needed:</span>{" "}
+                          <span className="text-white">{ifNeededNames.join(", ")}</span>
+                        </p>
+                      )}
+                      {unavailableNames.length > 0 && (
+                        <p className="mb-0">
+                          <span className="font-semibold text-slate-200">Unavailable:</span>{" "}
+                          <span className="text-white">{unavailableNames.join(", ")}</span>
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="mb-0">No one available</p>
+                  )}
+                </div>
+              );
+            })(),
+            document.body
+          )}
       </div>
     );
   }
@@ -479,7 +609,9 @@ export default function AvailabilityGrid(props: Props) {
         {(
           [
             { value: "great" as const, label: "Great", bg: "bg-emerald-500" },
-            { value: "ifNeeded" as const, label: "If needed", bg: "bg-amber-400" },
+            ...(p.disableIfNeeded
+              ? []
+              : [{ value: "ifNeeded" as const, label: "If needed", bg: "bg-amber-400" }]),
             { value: "unavailable" as const, label: "Unavailable", bg: "bg-red-400" },
           ] as const
         ).map(({ value, label, bg }) => (
@@ -496,18 +628,67 @@ export default function AvailabilityGrid(props: Props) {
             {label}
           </button>
         ))}
-        <span className="relative inline-flex cursor-help group/info">
+        <span
+          ref={scoringInfoRef}
+          className="relative inline-flex cursor-help group/info ml-4"
+          onMouseEnter={(e) => {
+            const el = e.currentTarget;
+            setScoringInfoVisible(true);
+            setScoringInfoAnchorRect(el.getBoundingClientRect());
+          }}
+          onMouseLeave={() => {
+            setScoringInfoVisible(false);
+            setScoringInfoAnchorRect(null);
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            if (scoringInfoVisible) {
+              setScoringInfoVisible(false);
+              setScoringInfoAnchorRect(null);
+            } else {
+              const el = e.currentTarget;
+              setScoringInfoVisible(true);
+              setScoringInfoAnchorRect(el.getBoundingClientRect());
+            }
+          }}
+        >
           <span
             className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-slate-400 text-slate-500 text-[10px] font-semibold"
             aria-label="How ranking works"
           >
             i
           </span>
-          <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 -translate-x-1/2 hidden group-hover/info:block px-2.5 py-1.5 text-xs text-white bg-slate-800 rounded shadow-lg whitespace-nowrap">
-            Great is weighted 1.5× more than If needed when ranking times.
-          </span>
         </span>
       </div>
+
+      {scoringInfoVisible &&
+        scoringInfoAnchorRect &&
+        typeof document !== "undefined" &&
+        createPortal(
+          (() => {
+            const rect = scoringInfoAnchorRect;
+            const iconCenter = rect.left + rect.width / 2;
+            const top = rect.bottom + 6;
+
+            return (
+              <div
+                ref={scoringInfoTooltipRef}
+                className="fixed z-50 px-2.5 py-1.5 text-xs text-white bg-slate-800 rounded shadow-lg pointer-events-none"
+                style={{
+                  left: iconCenter,
+                  top,
+                  transform: "translateX(-50%)",
+                  maxWidth: Math.min(280, window.innerWidth - 32),
+                }}
+              >
+                {p.disableIfNeeded
+                  ? "Only Great and Unavailable are used for ranking."
+                  : `Great = 1; If needed = ${(p.ifNeededWeight ?? DEFAULT_IF_NEEDED_WEIGHT).toFixed(2)} when ranking times.`}
+              </div>
+            );
+          })(),
+          document.body
+        )}
 
       <div
         ref={inputGridRef}

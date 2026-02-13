@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 import { EventWithAvailability } from "@/lib/types";
 import { getTimezoneOptions } from "@/lib/timezones";
-import { getSlotScoreValue } from "@/lib/scoring";
+import { getSlotScoreValue, DEFAULT_IF_NEEDED_WEIGHT } from "@/lib/scoring";
 
 function getDefaultTimezone(): string {
   if (typeof Intl !== "undefined" && Intl.DateTimeFormat) {
@@ -54,8 +54,9 @@ function computeTopSlots(event: EventWithAvailability): {
 }[] {
   if (!event.availability.length) return [];
 
-  const { dates, startHour, endHour } = event;
+  const { dates, startHour, endHour, disableIfNeeded, ifNeededWeight } = event;
   const totalParticipants = event.availability.length;
+  const weight = disableIfNeeded ? 0 : (ifNeededWeight ?? DEFAULT_IF_NEEDED_WEIGHT);
 
   const scored: {
     slot: string;
@@ -79,7 +80,7 @@ function computeTopSlots(event: EventWithAvailability): {
         const availableCount = great + ifNeeded;
         if (availableCount === 0) continue;
 
-        const score = getSlotScoreValue(great, ifNeeded);
+        const score = getSlotScoreValue(great, ifNeeded, weight);
         scored.push({ slot, score, availableCount, great });
       }
     }
@@ -124,6 +125,20 @@ export default function EventPage() {
   const [copied, setCopied] = useState(false);
 
   const [tab, setTab] = useState<"respond" | "results">("respond");
+
+  // When event loads and is expired or results hidden, default to results tab
+  useEffect(() => {
+    if (!event) return;
+    const exp = event.expiresAt
+      ? new Date(
+          event.expiresAt.includes("T") ? event.expiresAt : event.expiresAt + "T23:59:59"
+        )
+      : null;
+    const expired = !!exp && new Date() > exp;
+    const hideRes =
+      !!event.hideResultsUntilExpiration && !!exp && !expired;
+    if (expired || hideRes) setTab("results");
+  }, [event?.id, event?.expiresAt, event?.hideResultsUntilExpiration]);
   const timezoneOptions = useMemo(
     () => getTimezoneOptions(timezone),
     [timezone]
@@ -173,7 +188,15 @@ export default function EventPage() {
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to submit");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 410) {
+          setError("This survey has expired.");
+          fetchEvent();
+          return;
+        }
+        throw new Error((data.error as string) || "Failed to submit");
+      }
 
       const updated = await res.json();
       setEvent(updated);
@@ -211,6 +234,14 @@ export default function EventPage() {
 
   if (!event) return null;
 
+  const now = new Date();
+  const expiresAtDate = event.expiresAt
+    ? new Date(event.expiresAt.includes("T") ? event.expiresAt : event.expiresAt + "T23:59:59")
+    : null;
+  const isExpired = !!expiresAtDate && now > expiresAtDate;
+  const hideResults =
+    !!event.hideResultsUntilExpiration && !!expiresAtDate && !isExpired;
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
@@ -242,13 +273,22 @@ export default function EventPage() {
         </div>
       </div>
 
+      {isExpired && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
+          This survey has expired. You can still view group results below.
+        </div>
+      )}
+
       <div className="flex gap-1 mb-6 bg-slate-100 rounded-xl p-1">
         <button
-          onClick={() => setTab("respond")}
+          onClick={() => !isExpired && setTab("respond")}
+          disabled={isExpired}
           className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-colors ${
             tab === "respond"
               ? "bg-white text-slate-900 shadow-sm"
-              : "text-slate-500 hover:text-slate-700"
+              : isExpired
+                ? "text-slate-400 cursor-not-allowed"
+                : "text-slate-500 hover:text-slate-700"
           }`}
         >
           Add your availability
@@ -265,7 +305,7 @@ export default function EventPage() {
         </button>
       </div>
 
-      {tab === "respond" && (
+      {tab === "respond" && !isExpired && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           {submitted ? (
             <div className="text-center py-8">
@@ -327,9 +367,9 @@ export default function EventPage() {
               </div>
 
               <p className="text-sm text-slate-600 mb-3">
-                Click or drag to mark times: <strong>Great</strong>,{" "}
-                <strong>If needed</strong>, or <strong>Unavailable</strong>.
-                On touch screens: hold 1 second on a cell, then drag to paint multiple.
+                {event.disableIfNeeded
+                  ? "Click or drag to mark times: Great or Unavailable. On touch screens: hold 1 second on a cell, then drag to paint multiple."
+                  : "Click or drag to mark times: Great, If needed, or Unavailable. On touch screens: hold 1 second on a cell, then drag to paint multiple."}
               </p>
 
               <AvailabilityGrid
@@ -347,6 +387,8 @@ export default function EventPage() {
                   slots: a.slots,
                   slotsIfNeeded: a.slotsIfNeeded,
                 }))}
+                disableIfNeeded={event.disableIfNeeded}
+                ifNeededWeight={event.ifNeededWeight}
               />
 
               <div className="mt-4">
@@ -382,7 +424,11 @@ export default function EventPage() {
 
       {tab === "results" && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          {event.availability.length === 0 ? (
+          {hideResults ? (
+            <div className="text-center py-8 text-slate-500">
+              <p>Results are hidden until after the survey expires ({event.expiresAt}).</p>
+            </div>
+          ) : event.availability.length === 0 ? (
             <div className="text-center py-8 text-slate-500">
               <p>No responses yet. Share the link to get started.</p>
             </div>
@@ -432,6 +478,8 @@ export default function EventPage() {
                 endHour={event.endHour}
                 availability={event.availability}
                 mode="view"
+                disableIfNeeded={event.disableIfNeeded}
+                ifNeededWeight={event.ifNeededWeight}
               />
 
               {event.availability.some((a) => a.otherAvailabilityNote) && (
