@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addAvailability } from "@/lib/store";
+import { addAvailability, getEvent } from "@/lib/store";
 
 export async function POST(
   request: NextRequest,
@@ -18,7 +18,23 @@ export async function POST(
   }
 
   try {
-    const event = await addAvailability(
+    const event = await getEvent(id);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+    if (event.expiresAt) {
+      const exp = new Date(
+        event.expiresAt.includes("T") ? event.expiresAt : event.expiresAt + "T23:59:59"
+      );
+      if (new Date() > exp) {
+        return NextResponse.json(
+          { error: "This survey has expired." },
+          { status: 410 }
+        );
+      }
+    }
+
+    const updated = await addAvailability(
       id,
       participantName,
       slots,
@@ -26,10 +42,10 @@ export async function POST(
       timezone,
       otherAvailabilityNote
     );
-    if (!event) {
+    if (!updated) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
-    return NextResponse.json(event);
+    return NextResponse.json(updated);
   } catch (err) {
     console.error("Add availability failed:", err);
     return NextResponse.json(

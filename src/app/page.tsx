@@ -39,6 +39,12 @@ export default function Home() {
   const [creatorTimezone, setCreatorTimezone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [disableIfNeeded, setDisableIfNeeded] = useState(false);
+  const [ifNeededWeight, setIfNeededWeight] = useState(0.75);
+  const [expirationEnabled, setExpirationEnabled] = useState(false);
+  const [expiresAt, setExpiresAt] = useState("");
+  const [hideResultsUntilExpiration, setHideResultsUntilExpiration] = useState(false);
 
   useEffect(() => {
     setCreatorTimezone(getCreatorTimezone());
@@ -55,6 +61,10 @@ export default function Home() {
       setError("End time must be after start time");
       return;
     }
+    if (expirationEnabled && !expiresAt.trim()) {
+      setError("Please set an expiration date or disable expiration");
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -69,6 +79,11 @@ export default function Home() {
           startHour,
           endHour,
           eventTimezone: creatorTimezone || undefined,
+          disableIfNeeded: disableIfNeeded || undefined,
+          ifNeededWeight: disableIfNeeded ? undefined : ifNeededWeight,
+          expiresAt: expirationEnabled && expiresAt ? expiresAt : undefined,
+          hideResultsUntilExpiration:
+            expirationEnabled && hideResultsUntilExpiration ? true : undefined,
         }),
       });
 
@@ -182,6 +197,96 @@ export default function Home() {
       >
         {loading ? "Creating…" : "Let's Find a Time!"}
       </button>
+
+      {/* Advanced settings — discrete purple link, expandable */}
+      <div className="mt-4 text-center">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((o) => !o)}
+          className="text-purple-600 hover:text-purple-700 text-sm font-medium focus:outline-none focus:underline"
+        >
+          {advancedOpen ? "Hide advanced settings" : "Advanced settings"}
+        </button>
+        {advancedOpen && (
+          <div className="mt-4 p-4 rounded-xl border border-slate-200 bg-slate-50/80 text-left space-y-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="disable-if-needed"
+                checked={disableIfNeeded}
+                onChange={(e) => setDisableIfNeeded(e.target.checked)}
+                className="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+              />
+              <label htmlFor="disable-if-needed" className="text-sm font-medium text-slate-700">
+                Disable &quot;If needed&quot; option
+              </label>
+            </div>
+            <div className={disableIfNeeded ? "opacity-60 pointer-events-none" : ""}>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Relative weight of &quot;If needed&quot; (0 = unavailable, 1 = same as Great)
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={ifNeededWeight}
+                  onChange={(e) => setIfNeededWeight(Number(e.target.value))}
+                  className="flex-1 h-2 rounded-lg appearance-none bg-slate-200 accent-violet-600"
+                />
+                <span className="text-sm text-slate-600 w-10 tabular-nums">
+                  {ifNeededWeight.toFixed(2)}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="expiration-enabled"
+                checked={expirationEnabled}
+                onChange={(e) => setExpirationEnabled(e.target.checked)}
+                className="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+              />
+              <label htmlFor="expiration-enabled" className="text-sm font-medium text-slate-700">
+                Set expiration date
+              </label>
+            </div>
+            {expirationEnabled && (
+              <div className="pl-6 space-y-2">
+                <div>
+                  <label htmlFor="expires-at" className="block text-sm font-medium text-slate-700 mb-1">
+                    Expiration date
+                  </label>
+                  <input
+                    type="date"
+                    id="expires-at"
+                    value={expiresAt}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                    min={new Date().toISOString().slice(0, 10)}
+                    className="px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 outline-none text-slate-900"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="hide-results-until-expiration"
+                    checked={hideResultsUntilExpiration}
+                    onChange={(e) => setHideResultsUntilExpiration(e.target.checked)}
+                    className="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                  />
+                  <label
+                    htmlFor="hide-results-until-expiration"
+                    className="text-sm text-slate-700"
+                  >
+                    Hide group results until after expiration
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

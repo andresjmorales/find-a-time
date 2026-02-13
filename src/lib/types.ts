@@ -6,6 +6,14 @@ export interface Event {
   endHour: number; // 0-23
   eventTimezone?: string; // creator's TZ; grid is in this TZ
   createdAt: string;
+  /** When true, respondents only see Great / Unavailable (no "If needed"). */
+  disableIfNeeded?: boolean;
+  /** Weight for "If needed" in scoring: 0–1, default 0.75. Great = 1. Ignored when disableIfNeeded. */
+  ifNeededWeight?: number;
+  /** When set, survey stops accepting new responses and may show expired view. ISO date string (e.g. YYYY-MM-DD). */
+  expiresAt?: string;
+  /** When true and expiresAt is set, group results are hidden until after expiration. */
+  hideResultsUntilExpiration?: boolean;
 }
 
 export interface Availability {
