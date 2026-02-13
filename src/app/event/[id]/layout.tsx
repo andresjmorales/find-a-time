@@ -11,7 +11,7 @@ export async function generateMetadata({
   const { id } = await params;
   const event = await getEvent(id);
   const title = event?.name
-    ? `${BASE_TITLE} -- ${event.name}`
+    ? `${BASE_TITLE} — ${event.name}`
     : BASE_TITLE;
 
   return {
