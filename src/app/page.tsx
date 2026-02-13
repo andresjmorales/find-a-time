@@ -95,7 +95,7 @@ export default function Home() {
     <div className="w-full max-w-lg mx-auto px-4">
       <div className="text-center mb-8">
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2 tracking-tight">
-          Find a time
+          Find a Time
         </h1>
         <p className="text-slate-600">
           Create a link, share it, and see when everyone can meet.
