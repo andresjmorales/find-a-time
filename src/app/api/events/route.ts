@@ -1,7 +1,12 @@
+import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { v4 as uuidv4 } from "uuid";
-import { createEvent } from "@/lib/store";
+import { createEvent, getEvent } from "@/lib/store";
 import { EventWithAvailability } from "@/lib/types";
+
+/** URL-safe short ID (8 chars), e.g. fM9aLK4v */
+function generateShortId(): string {
+  return randomBytes(6).toString("base64url");
+}
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -14,8 +19,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let id = generateShortId();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (!(await getEvent(id))) break;
+    id = generateShortId();
+  }
+
   const event: EventWithAvailability = {
-    id: uuidv4(),
+    id,
     name,
     dates: dates.sort(),
     startHour,

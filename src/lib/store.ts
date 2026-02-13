@@ -5,6 +5,25 @@ import { EventWithAvailability } from "./types";
 
 const STORAGE_KEY = "find-a-time:events";
 
+/** Normalize stored events so availability always has slotsIfNeeded (backward compat for slotsPrefer). */
+function normalizeEvents(events: Record<string, unknown>): Record<string, EventWithAvailability> {
+  const result: Record<string, EventWithAvailability> = {};
+  for (const id of Object.keys(events)) {
+    const e = events[id] as any;
+    result[id] = {
+      ...e,
+      availability: (e?.availability || []).map((a: any) => ({
+        participantName: a.participantName,
+        timezone: a.timezone,
+        slots: a.slots || [],
+        slotsIfNeeded: a.slotsIfNeeded ?? a.slotsPrefer,
+        otherAvailabilityNote: a.otherAvailabilityNote,
+      })),
+    };
+  }
+  return result;
+}
+
 /** Supports both Upstash (UPSTASH_*) and Vercel KV (KV_REST_API_*) env names */
 function useRedis(): boolean {
   return !!(
@@ -42,7 +61,7 @@ function readEventsSync(): Record<string, EventWithAvailability> {
     return {};
   }
   const raw = fs.readFileSync(EVENTS_FILE, "utf-8");
-  return JSON.parse(raw);
+  return normalizeEvents(JSON.parse(raw));
 }
 
 function writeEventsSync(events: Record<string, EventWithAvailability>) {
@@ -57,7 +76,8 @@ async function readEvents(): Promise<Record<string, EventWithAvailability>> {
     const redis = getRedis();
     const raw = await redis.get<string>(STORAGE_KEY);
     if (raw == null) return {};
-    return typeof raw === "string" ? JSON.parse(raw) : raw;
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return normalizeEvents(parsed);
   }
   return readEventsSync();
 }
@@ -93,7 +113,7 @@ export async function addAvailability(
   eventId: string,
   participantName: string,
   slots: string[],
-  slotsPrefer: string[] = [],
+  slotsIfNeeded: string[] = [],
   timezone?: string,
   otherAvailabilityNote?: string
 ): Promise<EventWithAvailability | null> {
@@ -108,7 +128,7 @@ export async function addAvailability(
     participantName,
     timezone,
     slots,
-    slotsPrefer: slotsPrefer?.length ? slotsPrefer : undefined,
+    slotsIfNeeded: slotsIfNeeded?.length ? slotsIfNeeded : undefined,
     otherAvailabilityNote:
       otherAvailabilityNote?.trim() || undefined,
   });

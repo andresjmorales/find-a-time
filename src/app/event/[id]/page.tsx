@@ -1,16 +1,109 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useMemo as useReactMemo } from "react";
 import { useParams } from "next/navigation";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 import { EventWithAvailability } from "@/lib/types";
 import { getTimezoneOptions } from "@/lib/timezones";
+import { getSlotScoreValue } from "@/lib/scoring";
 
 function getDefaultTimezone(): string {
   if (typeof Intl !== "undefined" && Intl.DateTimeFormat) {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
   }
   return "UTC";
+}
+
+function slotKey(date: string, hour: number, half: number): string {
+  return `${date}T${String(hour).padStart(2, "0")}:${half === 0 ? "00" : "30"}`;
+}
+
+function parseSlot(slot: string): { date: string; hour: number; minute: number } {
+  const [date, time] = slot.split("T");
+  const [hourStr, minuteStr] = time.split(":");
+  return {
+    date,
+    hour: Number(hourStr),
+    minute: Number(minuteStr),
+  };
+}
+
+function formatSlotLabel(slot: string): string {
+  const { date, hour, minute } = parseSlot(slot);
+  const dateObj = new Date(date + "T12:00:00");
+
+  const dateLabel = dateObj.toLocaleDateString("default", {
+    month: "short",
+    day: "numeric",
+  });
+
+  const ampm = hour >= 12 ? "PM" : "AM";
+  let displayHour = hour % 12;
+  if (displayHour === 0) displayHour = 12;
+  const minuteStr = minute === 0 ? "00" : "30";
+
+  return `${dateLabel} @ ${displayHour}:${minuteStr} ${ampm}`;
+}
+
+function computeTopSlots(event: EventWithAvailability): {
+  slot: string;
+  label: string;
+  score: number;
+  availableCount: number;
+  totalParticipants: number;
+}[] {
+  if (!event.availability.length) return [];
+
+  const { dates, startHour, endHour } = event;
+  const totalParticipants = event.availability.length;
+
+  const scored: {
+    slot: string;
+    score: number;
+    availableCount: number;
+    great: number;
+  }[] = [];
+
+  for (const date of dates) {
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (const half of [0, 1] as const) {
+        const slot = slotKey(date, hour, half);
+        let great = 0;
+        let ifNeeded = 0;
+
+        for (const a of event.availability) {
+          if (a.slots.includes(slot)) great++;
+          else if (a.slotsIfNeeded?.includes(slot)) ifNeeded++;
+        }
+
+        const availableCount = great + ifNeeded;
+        if (availableCount === 0) continue;
+
+        const score = getSlotScoreValue(great, ifNeeded);
+        scored.push({ slot, score, availableCount, great });
+      }
+    }
+  }
+
+  if (!scored.length) return [];
+
+  // Sort: by score (desc), then by total available people (desc), then great count (desc), then slot
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.availableCount !== a.availableCount) return b.availableCount - a.availableCount;
+    if (b.great !== a.great) return b.great - a.great;
+    return a.slot.localeCompare(b.slot);
+  });
+
+  const top = scored.slice(0, 3);
+
+  return top.map((s) => ({
+    slot: s.slot,
+    label: formatSlotLabel(s.slot),
+    score: s.score,
+    availableCount: s.availableCount,
+    totalParticipants,
+  }));
 }
 
 export default function EventPage() {
@@ -25,7 +118,7 @@ export default function EventPage() {
   const [timezone, setTimezone] = useState(() => getDefaultTimezone());
   const [otherAvailabilityNote, setOtherAvailabilityNote] = useState("");
   const [slotsGreat, setSlotsGreat] = useState<string[]>([]);
-  const [slotsPrefer, setSlotsPrefer] = useState<string[]>([]);
+  const [slotsIfNeeded, setSlotsIfNeeded] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -53,6 +146,11 @@ export default function EventPage() {
     fetchEvent();
   }, [fetchEvent]);
 
+  const topSlots = useReactMemo(
+    () => (event ? computeTopSlots(event) : []),
+    [event]
+  );
+
   async function handleSubmit() {
     if (!participantName.trim()) {
       setError("Please enter your name");
@@ -70,7 +168,7 @@ export default function EventPage() {
           participantName: participantName.trim(),
           timezone: timezone || undefined,
           slots: slotsGreat,
-          slotsPrefer: slotsPrefer.length ? slotsPrefer : undefined,
+          slotsIfNeeded: slotsIfNeeded.length ? slotsIfNeeded : undefined,
           otherAvailabilityNote: otherAvailabilityNote.trim() || undefined,
         }),
       });
@@ -105,7 +203,7 @@ export default function EventPage() {
       <div className="text-center py-20">
         <p className="text-red-500 mb-4">{error}</p>
         <a href="/" className="text-violet-600 hover:underline">
-          Find a Time
+          Let's Find a Time!
         </a>
       </div>
     );
@@ -184,7 +282,7 @@ export default function EventPage() {
                   setParticipantName("");
                   setOtherAvailabilityNote("");
                   setSlotsGreat([]);
-                  setSlotsPrefer([]);
+                  setSlotsIfNeeded([]);
                 }}
                 className="text-violet-600 hover:underline text-sm"
               >
@@ -222,7 +320,9 @@ export default function EventPage() {
                   ))}
                 </select>
                 <p className="text-xs text-slate-500 mt-1">
-                  Grid times are in event timezone{event.eventTimezone ? ` (${event.eventTimezone})` : ""}. Your selection is stored in that same timezone.
+                  Grid times are in event timezone
+                  {event.eventTimezone ? ` (${event.eventTimezone})` : ""}. Your selection is
+                  stored in that same timezone.
                 </p>
               </div>
 
@@ -236,15 +336,15 @@ export default function EventPage() {
                 startHour={event.startHour}
                 endHour={event.endHour}
                 slotsGreat={slotsGreat}
-                slotsPrefer={slotsPrefer}
-                onSlotsChange={({ great, prefer }) => {
+                slotsIfNeeded={slotsIfNeeded}
+                onSlotsChange={({ great, ifNeeded }) => {
                   setSlotsGreat(great);
-                  setSlotsPrefer(prefer);
+                  setSlotsIfNeeded(ifNeeded);
                 }}
                 mode="input"
                 othersAvailability={event.availability.map((a) => ({
                   slots: a.slots,
-                  slotsPrefer: a.slotsPrefer,
+                  slotsIfNeeded: a.slotsIfNeeded,
                 }))}
               />
 
@@ -260,7 +360,8 @@ export default function EventPage() {
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  If some of your available times don’t align to the grid above, note them here. They’ll show at the bottom of Group results.
+                  If some of your available times don’t align to the grid above, note them here.
+                  They’ll show at the bottom of Group results.
                 </p>
               </div>
 
@@ -304,6 +405,26 @@ export default function EventPage() {
                 </p>
               </div>
 
+              {topSlots.length > 0 && (
+                <div className="mb-5 rounded-xl bg-slate-50 border border-slate-200 p-4">
+                  <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                    Recommended times
+                  </h3>
+                  <ul className="space-y-1 text-sm text-slate-800">
+                    {topSlots.map((slot, index) => (
+                      <li key={slot.slot}>
+                        <span className={index === 0 ? "font-semibold" : ""}>
+                          {slot.label}
+                        </span>{" "}
+                        <span className="text-slate-500">
+                          (works for {slot.availableCount}/{slot.totalParticipants})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <AvailabilityGrid
                 dates={event.dates}
                 startHour={event.startHour}
@@ -314,14 +435,17 @@ export default function EventPage() {
 
               {event.availability.some((a) => a.otherAvailabilityNote) && (
                 <div className="mt-6 pt-4 border-t border-slate-200">
-                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Other availability</h3>
+                  <h3 className="text-sm font-semibold text-slate-700 mb-2">
+                    Other availability
+                  </h3>
                   <ul className="text-sm text-slate-600 space-y-1">
                     {event.availability
                       .filter((a) => a.otherAvailabilityNote)
                       .map((a) => (
                         <li key={a.participantName}>
                           <strong>{a.participantName}</strong>
-                          {a.timezone ? ` (${a.timezone})` : ""} had other availability: {a.otherAvailabilityNote}
+                          {a.timezone ? ` (${a.timezone})` : ""} had other availability:{" "}
+                          {a.otherAvailabilityNote}
                         </li>
                       ))}
                   </ul>
@@ -340,3 +464,4 @@ function formatHour(hour: number): string {
   const h = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
   return `${h}:00 ${ampm}`;
 }
+

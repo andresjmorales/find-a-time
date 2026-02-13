@@ -1,19 +1,20 @@
 "use client";
 
 import { Fragment, useState, useCallback, useRef } from "react";
+import { getSlotScoreValue } from "@/lib/scoring";
 
-export type SlotMark = "great" | "prefer" | "unavailable";
+export type SlotMark = "great" | "ifNeeded" | "unavailable";
 
 interface AvailabilityGridInputProps {
   dates: string[];
   startHour: number;
   endHour: number;
   slotsGreat: string[];
-  slotsPrefer: string[];
-  onSlotsChange: (opts: { great: string[]; prefer: string[] }) => void;
+  slotsIfNeeded: string[];
+  onSlotsChange: (opts: { great: string[]; ifNeeded: string[] }) => void;
   mode: "input";
   /** Other participants' availability to show as overlay underneath */
-  othersAvailability?: { slots: string[]; slotsPrefer?: string[] }[];
+  othersAvailability?: { slots: string[]; slotsIfNeeded?: string[] }[];
 }
 
 interface GroupAvailabilityGridProps {
@@ -23,7 +24,7 @@ interface GroupAvailabilityGridProps {
   availability: {
     participantName: string;
     slots: string[];
-    slotsPrefer?: string[];
+    slotsIfNeeded?: string[];
   }[];
   mode: "view";
 }
@@ -64,44 +65,73 @@ export default function AvailabilityGrid(props: Props) {
     const p = props as GroupAvailabilityGridProps;
     const totalParticipants = p.availability.length;
 
-    function getSlotScore(slot: string): { great: number; prefer: number } {
+    function getSlotCounts(slot: string): { great: number; ifNeeded: number } {
       let great = 0;
-      let prefer = 0;
+      let ifNeeded = 0;
       for (const a of p.availability) {
         if (a.slots.includes(slot)) great++;
-        else if (a.slotsPrefer?.includes(slot)) prefer++;
+        else if (a.slotsIfNeeded?.includes(slot)) ifNeeded++;
       }
-      return { great, prefer };
+      return { great, ifNeeded };
     }
 
     function getSlotTooltipNames(slot: string): {
       great: string[];
-      prefer: string[];
+      ifNeeded: string[];
       unavailable: string[];
     } {
       const great: string[] = [];
-      const prefer: string[] = [];
+      const ifNeeded: string[] = [];
       for (const a of p.availability) {
         if (a.slots.includes(slot)) great.push(a.participantName);
-        else if (a.slotsPrefer?.includes(slot)) prefer.push(a.participantName);
+        else if (a.slotsIfNeeded?.includes(slot)) ifNeeded.push(a.participantName);
       }
       const unavailable = p.availability
         .map((a) => a.participantName)
-        .filter((n) => !great.includes(n) && !prefer.includes(n));
-      return { great, prefer, unavailable };
+        .filter((n) => !great.includes(n) && !ifNeeded.includes(n));
+      return { great, ifNeeded, unavailable };
     }
 
-    function getHeatColor(great: number, prefer: number): string {
-      if (totalParticipants === 0 && great === 0 && prefer === 0)
-        return "bg-slate-50";
-      const total = great * 2 + prefer; // great counts more
-      const maxTotal = totalParticipants * 2;
-      const ratio = maxTotal === 0 ? 0 : total / maxTotal;
-      if (ratio === 0) return "bg-slate-100";
-      if (ratio <= 0.25) return "bg-amber-100";
-      if (ratio <= 0.5) return "bg-lime-200";
-      if (ratio <= 0.75) return "bg-emerald-300";
-      return "bg-emerald-500";
+    // Pre-compute min/max scores across all slots with any availability
+    const scoreCache = new Map<string, number>();
+    let minScore = Number.POSITIVE_INFINITY;
+    let maxScore = 0;
+
+    for (const date of dates) {
+      for (const hour of hours) {
+        for (const half of [0, 1] as const) {
+          const slot = slotKey(date, hour, half);
+          const { great, ifNeeded } = getSlotCounts(slot);
+          if (great === 0 && ifNeeded === 0) continue;
+          const score = getSlotScoreValue(great, ifNeeded);
+          scoreCache.set(slot, score);
+          if (score < minScore) minScore = score;
+          if (score > maxScore) maxScore = score;
+        }
+      }
+    }
+
+    const hasScoredSlots = maxScore > 0 && minScore !== Number.POSITIVE_INFINITY;
+
+    function getHeatColor(score: number | undefined): string | undefined {
+      if (!hasScoredSlots || score === undefined) return undefined;
+
+      // If all non-zero slots have the same score, treat them as "best" (solid green)
+      if (maxScore === minScore) {
+        return "rgb(22, 163, 74)"; // green-600
+      }
+
+      const t = (score - minScore) / (maxScore - minScore); // 0 = worst, 1 = best
+
+      // Interpolate between yellow (worst) and green (best)
+      const yellow = { r: 250, g: 204, b: 21 }; // amber-400-ish
+      const green = { r: 22, g: 163, b: 74 }; // green-600-ish
+
+      const r = Math.round(yellow.r + (green.r - yellow.r) * t);
+      const g = Math.round(yellow.g + (green.g - yellow.g) * t);
+      const b = Math.round(yellow.b + (green.b - yellow.b) * t);
+
+      return `rgb(${r}, ${g}, ${b})`;
     }
 
     return (
@@ -112,7 +142,7 @@ export default function AvailabilityGrid(props: Props) {
             gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
           }}
         >
-          <div />
+          <div className="sticky left-0 z-10 bg-white" />
           {dates.map((date) => (
             <div
               key={date}
@@ -126,21 +156,30 @@ export default function AvailabilityGrid(props: Props) {
             [0, 1].map((half) => (
               <Fragment key={`row-${hour}-${half}`}>
                 <div
-                  className={`text-right pr-3 text-xs text-slate-500 flex items-center justify-end h-6 ${half === 0 ? "-mt-3" : ""}`}
+                  className={`sticky left-0 z-10 bg-white text-right pr-3 text-xs text-slate-500 flex items-center justify-end h-6 ${
+                    half === 0 ? "-mt-3" : ""
+                  }`}
                 >
                   {half === 0 ? formatHour(hour) : ""}
                 </div>
                 {dates.map((date) => {
                   const slot = slotKey(date, hour, half);
-                  const { great, prefer } = getSlotScore(slot);
-                  const { great: greatNames, prefer: preferNames, unavailable: unavailableNames } =
+                  const { great, ifNeeded } = getSlotCounts(slot);
+                  const score = scoreCache.get(slot);
+                  const { great: greatNames, ifNeeded: ifNeededNames, unavailable: unavailableNames } =
                     getSlotTooltipNames(slot);
                   const hasAny =
-                    greatNames.length || preferNames.length || unavailableNames.length;
+                    greatNames.length || ifNeededNames.length || unavailableNames.length;
+                  const heatColor = getHeatColor(score);
+                  const isEmpty = !hasAny;
+
                   return (
                     <div
                       key={slot}
-                      className={`h-6 border border-slate-200 ${getHeatColor(great, prefer)} transition-colors cursor-default group relative`}
+                      className={`h-6 border border-slate-200 transition-colors cursor-default group relative ${
+                        isEmpty ? "bg-slate-50" : ""
+                      }`}
+                      style={heatColor ? { backgroundColor: heatColor } : undefined}
                     >
                       <div className="hidden group-hover:block absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2.5 py-2 bg-slate-800 text-white text-xs rounded shadow-lg text-left w-[max(180px,40ch)]">
                         {hasAny ? (
@@ -151,16 +190,18 @@ export default function AvailabilityGrid(props: Props) {
                                 <span className="text-white">{greatNames.join(", ")}</span>
                               </p>
                             )}
-                            {preferNames.length > 0 && (
+                            {ifNeededNames.length > 0 && (
                               <p className="mb-1.5 last:mb-0">
-                                <span className="font-semibold text-slate-200">If Needed:</span>{" "}
-                                <span className="text-white">{preferNames.join(", ")}</span>
+                                <span className="font-semibold text-slate-200">If needed:</span>{" "}
+                                <span className="text-white">{ifNeededNames.join(", ")}</span>
                               </p>
                             )}
                             {unavailableNames.length > 0 && (
                               <p className="mb-0">
                                 <span className="font-semibold text-slate-200">Unavailable:</span>{" "}
-                                <span className="text-white">{unavailableNames.join(", ")}</span>
+                                <span className="text-white">
+                                  {unavailableNames.join(", ")}
+                                </span>
                               </p>
                             )}
                           </>
@@ -180,16 +221,18 @@ export default function AvailabilityGrid(props: Props) {
           <div className="flex items-center gap-3 mt-4 text-xs text-slate-600 flex-wrap">
             <span>Availability:</span>
             <span className="flex items-center gap-1">
-              <span className="w-4 h-3 bg-slate-100 border border-slate-200 rounded" />
+              <span className="w-4 h-3 bg-slate-50 border border-slate-200 rounded" />
               none
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-4 h-3 bg-amber-100 border border-slate-200 rounded" />
-              if needed
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-4 h-3 bg-emerald-400 border border-slate-200 rounded" />
-              great
+              <span
+                className="w-4 h-3 border border-slate-200 rounded"
+                style={{
+                  background:
+                    "linear-gradient(90deg, rgb(250, 204, 21) 0%, rgb(22, 163, 74) 100%)",
+                }}
+              />
+              worse ⟶ better
             </span>
           </div>
         )}
@@ -205,7 +248,7 @@ export default function AvailabilityGrid(props: Props) {
     (slot: string): number => {
       let n = 0;
       for (const o of others) {
-        if (o.slots.includes(slot) || o.slotsPrefer?.includes(slot)) n++;
+        if (o.slots.includes(slot) || o.slotsIfNeeded?.includes(slot)) n++;
       }
       return n;
     },
@@ -218,12 +261,12 @@ export default function AvailabilityGrid(props: Props) {
       dragApplyRef.current = paintAs;
 
       const inGreat = p.slotsGreat.includes(slot);
-      const inPrefer = p.slotsPrefer.includes(slot);
+      const inIfNeeded = p.slotsIfNeeded.includes(slot);
 
       if (paintAs === "unavailable") {
         p.onSlotsChange({
           great: p.slotsGreat.filter((s) => s !== slot),
-          prefer: p.slotsPrefer.filter((s) => s !== slot),
+          ifNeeded: p.slotsIfNeeded.filter((s) => s !== slot),
         });
         return;
       }
@@ -232,16 +275,16 @@ export default function AvailabilityGrid(props: Props) {
           great: inGreat
             ? p.slotsGreat.filter((s) => s !== slot)
             : [...p.slotsGreat.filter((s) => s !== slot), slot],
-          prefer: p.slotsPrefer.filter((s) => s !== slot),
+          ifNeeded: p.slotsIfNeeded.filter((s) => s !== slot),
         });
         return;
       }
-      // prefer
+      // ifNeeded
       p.onSlotsChange({
         great: p.slotsGreat.filter((s) => s !== slot),
-        prefer: inPrefer
-          ? p.slotsPrefer.filter((s) => s !== slot)
-          : [...p.slotsPrefer.filter((s) => s !== slot), slot],
+        ifNeeded: inIfNeeded
+          ? p.slotsIfNeeded.filter((s) => s !== slot)
+          : [...p.slotsIfNeeded.filter((s) => s !== slot), slot],
       });
     },
     [paintAs, p]
@@ -255,7 +298,7 @@ export default function AvailabilityGrid(props: Props) {
       if (mark === "unavailable") {
         p.onSlotsChange({
           great: p.slotsGreat.filter((s) => s !== slot),
-          prefer: p.slotsPrefer.filter((s) => s !== slot),
+          ifNeeded: p.slotsIfNeeded.filter((s) => s !== slot),
         });
         return;
       }
@@ -263,15 +306,15 @@ export default function AvailabilityGrid(props: Props) {
         if (!p.slotsGreat.includes(slot)) {
           p.onSlotsChange({
             great: [...p.slotsGreat, slot],
-            prefer: p.slotsPrefer.filter((s) => s !== slot),
+            ifNeeded: p.slotsIfNeeded.filter((s) => s !== slot),
           });
         }
         return;
       }
-      if (!p.slotsPrefer.includes(slot)) {
+      if (!p.slotsIfNeeded.includes(slot)) {
         p.onSlotsChange({
           great: p.slotsGreat.filter((s) => s !== slot),
-          prefer: [...p.slotsPrefer, slot],
+          ifNeeded: [...p.slotsIfNeeded, slot],
         });
       }
     },
@@ -283,7 +326,7 @@ export default function AvailabilityGrid(props: Props) {
   }, []);
 
   const inGreat = (slot: string) => p.slotsGreat.includes(slot);
-  const inPrefer = (slot: string) => p.slotsPrefer.includes(slot);
+  const inIfNeeded = (slot: string) => p.slotsIfNeeded.includes(slot);
   const othersCount = others.length;
 
   return (
@@ -298,7 +341,7 @@ export default function AvailabilityGrid(props: Props) {
         {(
           [
             { value: "great" as const, label: "Great", bg: "bg-emerald-500" },
-            { value: "prefer" as const, label: "If needed", bg: "bg-amber-400" },
+            { value: "ifNeeded" as const, label: "If needed", bg: "bg-amber-400" },
             { value: "unavailable" as const, label: "Unavailable", bg: "bg-red-400" },
           ] as const
         ).map(({ value, label, bg }) => (
@@ -315,6 +358,17 @@ export default function AvailabilityGrid(props: Props) {
             {label}
           </button>
         ))}
+        <span className="relative inline-flex cursor-help group/info">
+          <span
+            className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-slate-400 text-slate-500 text-[10px] font-semibold"
+            aria-label="How ranking works"
+          >
+            i
+          </span>
+          <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 -translate-x-1/2 hidden group-hover/info:block px-2.5 py-1.5 text-xs text-white bg-slate-800 rounded shadow-lg whitespace-nowrap">
+            Great is weighted 1.5× more than If needed when ranking times.
+          </span>
+        </span>
       </div>
 
       <div
@@ -323,7 +377,7 @@ export default function AvailabilityGrid(props: Props) {
           gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
         }}
       >
-        <div />
+        <div className="sticky left-0 z-10 bg-white" />
         {dates.map((date) => (
           <div
             key={date}
@@ -337,14 +391,16 @@ export default function AvailabilityGrid(props: Props) {
           [0, 1].map((half) => (
             <Fragment key={`row-${hour}-${half}`}>
               <div
-                className={`text-right pr-3 text-xs text-slate-500 flex items-center justify-end h-8 ${half === 0 ? "-mt-4" : ""}`}
+                className={`sticky left-0 z-10 bg-white text-right pr-3 text-xs text-slate-500 flex items-center justify-end h-8 ${
+                  half === 0 ? "-mt-4" : ""
+                }`}
               >
                 {half === 0 ? formatHour(hour) : ""}
               </div>
               {dates.map((date) => {
                 const slot = slotKey(date, hour, half);
                 const great = inGreat(slot);
-                const prefer = inPrefer(slot);
+                const ifNeeded = inIfNeeded(slot);
                 const n = othersCount > 0 ? getOthersCount(slot) : 0;
                 const overlayOpacity =
                   othersCount > 0 && n > 0
@@ -371,7 +427,7 @@ export default function AvailabilityGrid(props: Props) {
                       className={`absolute inset-0 border border-slate-200 transition-colors ${
                         great
                           ? "bg-emerald-500"
-                          : prefer
+                          : ifNeeded
                             ? "bg-amber-400"
                             : "bg-red-300/70"
                       }`}
@@ -391,3 +447,4 @@ export default function AvailabilityGrid(props: Props) {
     </div>
   );
 }
+

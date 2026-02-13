@@ -32,7 +32,7 @@ function getCreatorTimezone(): string {
 
 export default function Home() {
   const router = useRouter();
-  const [name, setName] = useState("Meet");
+  const [name, setName] = useState("Party");
   const [dates, setDates] = useState<string[]>(() => getDefaultDates());
   const [startHour, setStartHour] = useState(9);
   const [endHour, setEndHour] = useState(17);
@@ -64,7 +64,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name.trim() || "Meet",
+          name: name.trim() || "Party",
           dates,
           startHour,
           endHour,
@@ -95,7 +95,7 @@ export default function Home() {
     <div className="w-full max-w-lg mx-auto px-4">
       <div className="text-center mb-8">
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2 tracking-tight">
-          Find a Time
+          Let's Find a Time!
         </h1>
         <p className="text-slate-600">
           Create a link, share it, and see when everyone can meet.
@@ -174,13 +174,13 @@ export default function Home() {
 
       {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
-      {/* Find a time — under the calendar view */}
+      {/* Create event — under the calendar view */}
       <button
         onClick={handleFindATime}
         disabled={loading}
         className="w-full py-4 px-6 bg-violet-600 text-white text-lg font-semibold rounded-2xl shadow-lg shadow-violet-600/25 hover:bg-violet-700 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? "Creating…" : "Let's find a time!"}
+        {loading ? "Creating…" : "Let's Find a Time!"}
       </button>
     </div>
   );
