@@ -329,6 +329,7 @@ export default function EventPage() {
               <p className="text-sm text-slate-600 mb-3">
                 Click or drag to mark times: <strong>Great</strong>,{" "}
                 <strong>If needed</strong>, or <strong>Unavailable</strong>.
+                On touch screens: hold 1 second on a cell, then drag to paint multiple.
               </p>
 
               <AvailabilityGrid
