@@ -105,7 +105,7 @@ export default function EventPage() {
       <div className="text-center py-20">
         <p className="text-red-500 mb-4">{error}</p>
         <a href="/" className="text-violet-600 hover:underline">
-          Find a time
+          Find a Time
         </a>
       </div>
     );

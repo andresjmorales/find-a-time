@@ -4,10 +4,16 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import DatePicker from "@/components/DatePicker";
 
+/** Number of preset days selected by default: today, tomorrow, and the day after. */
+export const DEFAULT_PRESET_DAYS_COUNT = 3;
+
+/** Maximum number of dates the user can select (easy to change for future use cases). */
+export const MAX_PRESET_DAYS_LIMIT = 7;
+
 function getDefaultDates(): string[] {
   const dates: string[] = [];
   const today = new Date();
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < DEFAULT_PRESET_DAYS_COUNT; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     dates.push(
@@ -89,20 +95,24 @@ export default function Home() {
     <div className="w-full max-w-lg mx-auto px-4">
       <div className="text-center mb-8">
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2 tracking-tight">
-          Find a time
+          Find a Time
         </h1>
         <p className="text-slate-600">
           Create a link, share it, and see when everyone can meet.
         </p>
       </div>
 
-      {/* Calendar — always visible, next 7 days pre-selected */}
+      {/* Calendar — always visible, today/tomorrow/day after pre-selected, up to MAX_PRESET_DAYS_LIMIT */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-slate-700 mb-2">
           What dates might work?
         </label>
         <div className="flex justify-center">
-          <DatePicker selectedDates={dates} onDatesChange={setDates} />
+          <DatePicker
+            selectedDates={dates}
+            onDatesChange={setDates}
+            maxDates={MAX_PRESET_DAYS_LIMIT}
+          />
         </div>
         {dates.length > 0 && (
           <p className="text-sm text-slate-500 mt-2 text-center">

@@ -5,6 +5,8 @@ import { useState } from "react";
 interface DatePickerProps {
   selectedDates: string[];
   onDatesChange: (dates: string[]) => void;
+  /** Maximum number of dates that can be selected (optional). */
+  maxDates?: number;
 }
 
 function getDaysInMonth(year: number, month: number): number {
@@ -22,6 +24,7 @@ function formatDate(year: number, month: number, day: number): string {
 export default function DatePicker({
   selectedDates,
   onDatesChange,
+  maxDates,
 }: DatePickerProps) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -38,8 +41,9 @@ export default function DatePicker({
   function toggleDate(dateStr: string) {
     if (selectedDates.includes(dateStr)) {
       onDatesChange(selectedDates.filter((d) => d !== dateStr));
-    } else {
-      onDatesChange([...selectedDates, dateStr]);
+    } else if (maxDates == null || selectedDates.length < maxDates) {
+      const next = [...selectedDates, dateStr].sort();
+      onDatesChange(next);
     }
   }
 

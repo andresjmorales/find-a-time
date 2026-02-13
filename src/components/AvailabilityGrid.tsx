@@ -107,7 +107,7 @@ export default function AvailabilityGrid(props: Props) {
     return (
       <div className="overflow-x-auto">
         <div
-          className="inline-grid gap-0"
+          className="inline-grid gap-0 pt-3"
           style={{
             gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
           }}
@@ -125,7 +125,9 @@ export default function AvailabilityGrid(props: Props) {
           {hours.map((hour) =>
             [0, 1].map((half) => (
               <Fragment key={`row-${hour}-${half}`}>
-                <div className="text-right pr-3 text-xs text-slate-500 flex items-center justify-end h-6">
+                <div
+                  className={`text-right pr-3 text-xs text-slate-500 flex items-center justify-end h-6 ${half === 0 ? "-mt-3" : ""}`}
+                >
                   {half === 0 ? formatHour(hour) : ""}
                 </div>
                 {dates.map((date) => {
@@ -316,7 +318,7 @@ export default function AvailabilityGrid(props: Props) {
       </div>
 
       <div
-        className="inline-grid gap-0 relative"
+        className="inline-grid gap-0 relative pt-4"
         style={{
           gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
         }}
@@ -334,7 +336,9 @@ export default function AvailabilityGrid(props: Props) {
         {hours.map((hour) =>
           [0, 1].map((half) => (
             <Fragment key={`row-${hour}-${half}`}>
-              <div className="text-right pr-3 text-xs text-slate-500 flex items-center justify-end h-8">
+              <div
+                className={`text-right pr-3 text-xs text-slate-500 flex items-center justify-end h-8 ${half === 0 ? "-mt-4" : ""}`}
+              >
                 {half === 0 ? formatHour(hour) : ""}
               </div>
               {dates.map((date) => {
