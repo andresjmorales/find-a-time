@@ -310,26 +310,23 @@ export default function AvailabilityGrid(props: Props) {
     }
 
     const hasScoredSlots = maxScore > 0 && minScore !== Number.POSITIVE_INFINITY;
+    const isSingleParticipant = p.availability.length === 1;
 
-    function getHeatColor(score: number | undefined): string | undefined {
-      if (!hasScoredSlots || score === undefined) return undefined;
-
-      // If all non-zero slots have the same score, treat them as "best" (solid green)
-      if (maxScore === minScore) {
-        return "rgb(22, 163, 74)"; // green-600
+    function getCellColor(slot: string, score: number | undefined): string | undefined {
+      // Single-participant view: use their actual choices (green / yellow / no fill)
+      if (isSingleParticipant) {
+        const a = p.availability[0];
+        if (a.slots.includes(slot)) return "rgb(22, 163, 74)"; // green-600 (Great)
+        if (a.slotsIfNeeded?.includes(slot)) return "rgb(250, 204, 21)"; // amber-400 (If needed)
+        return undefined; // unavailable → default bg
       }
-
+      // Group view: white (zero) to green (opacity scale; darkest = best)
+      if (!hasScoredSlots || score === undefined) return undefined;
+      const greenRgb = { r: 22, g: 163, b: 74 }; // green-600
+      if (maxScore === minScore) return `rgb(${greenRgb.r}, ${greenRgb.g}, ${greenRgb.b})`;
       const t = (score - minScore) / (maxScore - minScore); // 0 = worst, 1 = best
-
-      // Interpolate between yellow (worst) and green (best)
-      const yellow = { r: 250, g: 204, b: 21 }; // amber-400-ish
-      const green = { r: 22, g: 163, b: 74 }; // green-600-ish
-
-      const r = Math.round(yellow.r + (green.r - yellow.r) * t);
-      const g = Math.round(yellow.g + (green.g - yellow.g) * t);
-      const b = Math.round(yellow.b + (green.b - yellow.b) * t);
-
-      return `rgb(${r}, ${g}, ${b})`;
+      const opacity = 0.2 + 0.8 * t; // worst = 0.2, best = 1
+      return `rgba(${greenRgb.r}, ${greenRgb.g}, ${greenRgb.b}, ${opacity})`;
     }
 
     return (
@@ -390,7 +387,7 @@ export default function AvailabilityGrid(props: Props) {
                     getSlotTooltipNames(slot);
                   const hasAny =
                     greatNames.length || ifNeededNames.length || unavailableNames.length;
-                  const heatColor = getHeatColor(score);
+                  const cellColor = getCellColor(slot, score);
                   const isEmpty = !hasAny;
                   const isActive = activeTooltipSlot === slot;
 
@@ -403,7 +400,7 @@ export default function AvailabilityGrid(props: Props) {
                       className={`h-6 border border-slate-200 transition-colors cursor-default group relative ${
                         isEmpty ? "bg-slate-50" : ""
                       }`}
-                      style={heatColor ? { backgroundColor: heatColor } : undefined}
+                      style={cellColor ? { backgroundColor: cellColor } : undefined}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (isActive) hideTooltip();
@@ -432,23 +429,9 @@ export default function AvailabilityGrid(props: Props) {
           </div>
         </div>
         {totalParticipants > 0 && (
-          <div className="flex items-center gap-3 mt-4 text-xs text-slate-600 flex-wrap">
-            <span>Availability:</span>
-            <span className="flex items-center gap-1">
-              <span className="w-4 h-3 bg-slate-50 border border-slate-200 rounded" />
-              none
-            </span>
-            <span className="flex items-center gap-1">
-              <span
-                className="w-4 h-3 border border-slate-200 rounded"
-                style={{
-                  background:
-                    "linear-gradient(90deg, rgb(250, 204, 21) 0%, rgb(22, 163, 74) 100%)",
-                }}
-              />
-              worse ➜ better
-            </span>
-          </div>
+          <p className="mt-4 text-xs text-slate-500">
+            Darker green = more people available; lightest green = fewer.
+          </p>
         )}
 
         {activeTooltipSlot &&

@@ -137,6 +137,7 @@ export default function EventPage() {
   const [copied, setCopied] = useState(false);
 
   const [tab, setTab] = useState<"respond" | "results">("respond");
+  const [filterByParticipant, setFilterByParticipant] = useState<string | null>(null);
 
   // When event loads and is expired or results hidden, default to results tab
   useEffect(() => {
@@ -473,16 +474,34 @@ export default function EventPage() {
                 <p className="text-sm text-slate-500">
                   {event.availability.length} response
                   {event.availability.length !== 1 ? "s" : ""}:{" "}
-                  {event.availability
-                    .map(
-                      (a) =>
-                        a.timezone
-                          ? `${a.participantName} (${a.timezone})`
-                          : a.participantName
-                    )
-                    .join(", ")}
+                  {event.availability.map((a, i) => (
+                    <span key={a.participantName}>
+                      {i > 0 && ", "}
+                      <button
+                        type="button"
+                        onClick={() => setFilterByParticipant(a.participantName)}
+                        className="font-medium text-violet-600 underline hover:text-violet-700 focus:outline-none focus:underline"
+                      >
+                        {a.participantName}
+                        {a.timezone ? ` (${getTimezoneShortName(a.timezone)})` : ""}
+                      </button>
+                    </span>
+                  ))}
                 </p>
               </div>
+
+              {filterByParticipant && (
+                <p className="text-sm text-slate-600 mb-4 rounded-lg bg-slate-100 border border-slate-200 px-3 py-2">
+                  Showing just {filterByParticipant}&apos;s availability.{" "}
+                  <button
+                    type="button"
+                    onClick={() => setFilterByParticipant(null)}
+                    className="font-medium text-violet-600 underline hover:text-violet-700 focus:outline-none focus:underline"
+                  >
+                    Show all
+                  </button>
+                </p>
+              )}
 
               {topSlots.length > 0 && topSlots.some((s) => s.availableCount > 1) ? (
                 <div className="mb-5 rounded-xl bg-slate-50 border border-slate-200 p-4">
@@ -518,7 +537,11 @@ export default function EventPage() {
                 endHour={event.endHour}
                 eventTimezone={event.eventTimezone}
                 viewerTimezone={timezone}
-                availability={event.availability}
+                availability={
+                  filterByParticipant
+                    ? event.availability.filter((a) => a.participantName === filterByParticipant)
+                    : event.availability
+                }
                 mode="view"
                 disableIfNeeded={event.disableIfNeeded}
                 ifNeededWeight={event.ifNeededWeight}
@@ -535,7 +558,7 @@ export default function EventPage() {
                       .map((a) => (
                         <li key={a.participantName}>
                           <strong>{a.participantName}</strong>
-                          {a.timezone ? ` (${a.timezone})` : ""} had other availability:{" "}
+                          {a.timezone ? ` (${getTimezoneShortName(a.timezone)})` : ""} had other availability:{" "}
                           {a.otherAvailabilityNote}
                         </li>
                       ))}

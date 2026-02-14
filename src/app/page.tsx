@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import DatePicker from "@/components/DatePicker";
+import { getTimezoneShortName } from "@/lib/timezones";
 
 /** Number of preset days selected by default: today, tomorrow, and the day after. */
 export const DEFAULT_PRESET_DAYS_COUNT = 3;
@@ -191,7 +192,7 @@ export default function Home() {
         </div>
         {creatorTimezone && (
           <p className="text-xs text-slate-500 mt-2">
-            Your time zone: <span className="font-medium text-slate-600">{creatorTimezone}</span>
+            Your time zone: <span className="font-medium text-slate-600">{creatorTimezone} ({getTimezoneShortName(creatorTimezone)})</span>
           </p>
         )}
       </div>
