@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getEvent } from "@/lib/store";
 
-const BASE_TITLE = "Let's Find a Time!";
+const BASE_TITLE = "Let’s Find a Time!";
 
 export async function generateMetadata({
   params,

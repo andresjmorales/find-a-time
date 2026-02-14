@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+@theme {
+  /* Primary: match logo */
+  --color-violet-500: #9040ff;
+  --color-violet-600: #9040ff;
+  --color-violet-700: #7d38e6;
+  /* Secondary: true purple (e.g. advanced options link) */
+  --color-purple-600: #6d28d9;
+  --color-purple-700: #5b21b6;
+}

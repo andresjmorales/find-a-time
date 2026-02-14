@@ -1,4 +1,4 @@
-# Let's Find a Time!
+# Let’s Find a Time!
 
 **Create a link, share it, and see when everyone can meet.** A lightweight scheduling poll: pick dates and hours, share the event URL, and respondents mark slots as **Great**, **If needed**, or **Unavailable**. The app scores slots and surfaces the best times.
 
