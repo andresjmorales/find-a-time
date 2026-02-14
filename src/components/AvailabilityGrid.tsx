@@ -3,6 +3,7 @@
 import { Fragment, useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { getSlotScoreValue, DEFAULT_IF_NEEDED_WEIGHT } from "@/lib/scoring";
+import { formatSlotTimeInTimezone } from "@/lib/timezones";
 
 const TOOLTIP_MAX_WIDTH = 280;
 const TOOLTIP_MIN_WIDTH = 120;
@@ -17,6 +18,10 @@ interface AvailabilityGridInputProps {
   slotsIfNeeded: string[];
   onSlotsChange: (opts: { great: string[]; ifNeeded: string[] }) => void;
   mode: "input";
+  /** Creator's timezone (ground truth); grid slots are in this TZ. */
+  eventTimezone?: string;
+  /** Viewer's timezone; when set, time column labels are shown in this TZ. */
+  viewerTimezone?: string;
   /** Other participants' availability to show as overlay underneath */
   othersAvailability?: { slots: string[]; slotsIfNeeded?: string[] }[];
   /** When true, only Great / Unavailable are shown; "If needed" is hidden. */
@@ -35,6 +40,10 @@ interface GroupAvailabilityGridProps {
     slotsIfNeeded?: string[];
   }[];
   mode: "view";
+  /** Creator's timezone (ground truth). */
+  eventTimezone?: string;
+  /** Viewer's timezone; when set, time column labels are shown in this TZ. */
+  viewerTimezone?: string;
   /** When true, "If needed" slots are not counted in score (weight 0). */
   disableIfNeeded?: boolean;
   /** Weight for "If needed" in scoring: 0–1, default 0.75. */
@@ -226,6 +235,28 @@ export default function AvailabilityGrid(props: Props) {
     hours.push(h);
   }
 
+  const eventTz = "eventTimezone" in props ? props.eventTimezone : undefined;
+  const viewerTz = "viewerTimezone" in props ? props.viewerTimezone : undefined;
+  const showTimesInViewerTz =
+    !!eventTz &&
+    !!viewerTz &&
+    eventTz !== viewerTz &&
+    dates.length > 0;
+  const firstDate = dates[0] ?? "";
+
+  function getTimeLabel(hour: number, half: 0 | 1): string {
+    if (showTimesInViewerTz) {
+      return formatSlotTimeInTimezone(
+        firstDate,
+        hour,
+        half,
+        eventTz!,
+        viewerTz!
+      );
+    }
+    return half === 0 ? formatHour(hour) : "";
+  }
+
   if (mode === "view") {
     const p = props as GroupAvailabilityGridProps;
     const totalParticipants = p.availability.length;
@@ -310,7 +341,7 @@ export default function AvailabilityGrid(props: Props) {
               gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
             }}
           >
-          <div className="sticky left-0 z-10 bg-white" />
+          <div className="sticky left-0 z-[5] bg-white" />
           {dates.map((date) => (
             <div
               key={date}
@@ -322,17 +353,34 @@ export default function AvailabilityGrid(props: Props) {
 
           {hours.map((hour, hourIndex) => (
             <Fragment key={hour}>
-              <div
-                className="sticky left-0 z-10 bg-white col-start-1 min-h-0 relative"
-                style={{ gridRow: `${2 + hourIndex * 2} / span 2` }}
-              >
-                <span
-                  className="absolute right-3 top-0 text-xs text-slate-500"
-                  style={{ transform: "translateY(-0.5rem)" }}
+              {showTimesInViewerTz ? (
+                ([0, 1] as const).map((half) => (
+                  <div
+                    key={half}
+                    className="sticky left-0 z-[5] bg-white col-start-1 min-h-0 relative"
+                    style={{ gridRow: `${2 + hourIndex * 2 + half} / span 1` }}
+                  >
+                    <span
+                      className="absolute right-3 top-0 text-xs text-slate-500"
+                      style={{ transform: "translateY(-0.5rem)" }}
+                    >
+                      {getTimeLabel(hour, half)}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div
+                  className="sticky left-0 z-[5] bg-white col-start-1 min-h-0 relative"
+                  style={{ gridRow: `${2 + hourIndex * 2} / span 2` }}
                 >
-                  {formatHour(hour)}
-                </span>
-              </div>
+                  <span
+                    className="absolute right-3 top-0 text-xs text-slate-500"
+                    style={{ transform: "translateY(-0.5rem)" }}
+                  >
+                    {getTimeLabel(hour, 0)}
+                  </span>
+                </div>
+              )}
               {[0, 1].map((half) =>
                 dates.map((date) => {
                   const slot = slotKey(date, hour, half);
@@ -577,7 +625,7 @@ export default function AvailabilityGrid(props: Props) {
         touchPaintActiveRef.current = true;
         const slot = getSlotFromPoint(touchStartXRef.current, touchStartYRef.current);
         if (slot) paintHandlersRef.current?.handleMouseDown(slot);
-      }, 1000) as unknown as number;
+      }, 250) as unknown as number;
     },
     []
   );
@@ -705,7 +753,7 @@ export default function AvailabilityGrid(props: Props) {
           gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
         }}
       >
-        <div className="sticky left-0 z-10 bg-white" />
+        <div className="sticky left-0 z-[5] bg-white" />
         {dates.map((date) => (
           <div
             key={date}
@@ -717,17 +765,34 @@ export default function AvailabilityGrid(props: Props) {
 
         {hours.map((hour, hourIndex) => (
           <Fragment key={hour}>
-            <div
-              className="sticky left-0 z-10 bg-white col-start-1 min-h-0 relative"
-              style={{ gridRow: `${2 + hourIndex * 2} / span 2` }}
-            >
-              <span
-                className="absolute right-3 top-0 text-xs text-slate-500"
-                style={{ transform: "translateY(-0.5rem)" }}
+            {showTimesInViewerTz ? (
+              ([0, 1] as const).map((half) => (
+                <div
+                  key={half}
+                  className="sticky left-0 z-[5] bg-white col-start-1 min-h-0 relative"
+                  style={{ gridRow: `${2 + hourIndex * 2 + half} / span 1` }}
+                >
+                  <span
+                    className="absolute right-3 top-0 text-xs text-slate-500"
+                    style={{ transform: "translateY(-0.5rem)" }}
+                  >
+                    {getTimeLabel(hour, half)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div
+                className="sticky left-0 z-[5] bg-white col-start-1 min-h-0 relative"
+                style={{ gridRow: `${2 + hourIndex * 2} / span 2` }}
               >
-                {formatHour(hour)}
-              </span>
-            </div>
+                <span
+                  className="absolute right-3 top-0 text-xs text-slate-500"
+                  style={{ transform: "translateY(-0.5rem)" }}
+                >
+                  {getTimeLabel(hour, 0)}
+                </span>
+              </div>
+            )}
             {[0, 1].map((half) =>
               dates.map((date) => {
                 const slot = slotKey(date, hour, half);

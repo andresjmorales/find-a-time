@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useMemo as useReactMemo } fr
 import { useParams } from "next/navigation";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 import { EventWithAvailability } from "@/lib/types";
-import { getTimezoneOptions } from "@/lib/timezones";
+import { getTimezoneOptions, getTimezoneShortName, formatSlotLabelInTimezone, formatSlotTimeWithAbbrev } from "@/lib/timezones";
 import { getSlotScoreValue, DEFAULT_IF_NEEDED_WEIGHT } from "@/lib/scoring";
 
 function getDefaultTimezone(): string {
@@ -28,24 +28,32 @@ function parseSlot(slot: string): { date: string; hour: number; minute: number }
   };
 }
 
-function formatSlotLabel(slot: string): string {
+function formatSlotLabel(
+  slot: string,
+  eventTimezone?: string,
+  viewerTimezone?: string
+): string {
   const { date, hour, minute } = parseSlot(slot);
+  if (eventTimezone && viewerTimezone) {
+    return formatSlotLabelInTimezone(slot, eventTimezone, viewerTimezone);
+  }
   const dateObj = new Date(date + "T12:00:00");
-
   const dateLabel = dateObj.toLocaleDateString("default", {
+    weekday: "short",
     month: "short",
     day: "numeric",
   });
-
   const ampm = hour >= 12 ? "PM" : "AM";
   let displayHour = hour % 12;
   if (displayHour === 0) displayHour = 12;
   const minuteStr = minute === 0 ? "00" : "30";
-
   return `${dateLabel} @ ${displayHour}:${minuteStr} ${ampm}`;
 }
 
-function computeTopSlots(event: EventWithAvailability): {
+function computeTopSlots(
+  event: EventWithAvailability,
+  viewerTimezone?: string
+): {
   slot: string;
   label: string;
   score: number;
@@ -97,10 +105,14 @@ function computeTopSlots(event: EventWithAvailability): {
   });
 
   const top = scored.slice(0, 3);
+  const eventTz = event.eventTimezone;
+  const useViewerTz = eventTz && viewerTimezone && eventTz !== viewerTimezone;
 
   return top.map((s) => ({
     slot: s.slot,
-    label: formatSlotLabel(s.slot),
+    label: useViewerTz
+      ? `${formatSlotLabelInTimezone(s.slot, eventTz, viewerTimezone)} ${getTimezoneShortName(viewerTimezone)} (${formatSlotTimeWithAbbrev(s.slot, eventTz, eventTz)})`
+      : formatSlotLabel(s.slot),
     score: s.score,
     availableCount: s.availableCount,
     totalParticipants,
@@ -164,16 +176,16 @@ export default function EventPage() {
   // Keep tab title in sync when event loads (e.g. after client fetch)
   useEffect(() => {
     if (!event?.name) return;
-    const title = `Let's Find a Time! — ${event.name}`;
+    const title = `Let’s Find a Time! — ${event.name}`;
     document.title = title;
     return () => {
-      document.title = "Let's Find a Time!";
+      document.title = "Let’s Find a Time!";
     };
   }, [event?.name]);
 
   const topSlots = useReactMemo(
-    () => (event ? computeTopSlots(event) : []),
-    [event]
+    () => (event ? computeTopSlots(event, timezone) : []),
+    [event, timezone]
   );
 
   async function handleSubmit() {
@@ -236,7 +248,7 @@ export default function EventPage() {
       <div className="text-center py-20">
         <p className="text-red-500 mb-4">{error}</p>
         <a href="/" className="text-violet-600 hover:underline">
-          Let's Find a Time!
+          Let’s Find a Time!
         </a>
       </div>
     );
@@ -260,7 +272,7 @@ export default function EventPage() {
           {event.dates.length} day{event.dates.length !== 1 ? "s" : ""} ·{" "}
           {formatHour(event.startHour)} – {formatHour(event.endHour)}
           {event.eventTimezone && (
-            <> · Times in <span className="font-medium text-slate-600">{event.eventTimezone}</span></>
+            <> · Created in <span className="font-medium text-slate-600">{getTimezoneShortName(event.eventTimezone)}</span></>
           )}
           {event.availability.length > 0 && (
             <> · {event.availability.length} response{event.availability.length !== 1 ? "s" : ""}</>
@@ -356,23 +368,27 @@ export default function EventPage() {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-slate-500 mt-1">
-                  Grid times are in event timezone
-                  {event.eventTimezone ? ` (${event.eventTimezone})` : ""}. Your selection is
-                  stored in that same timezone.
-                </p>
               </div>
+
+              {event.eventTimezone && timezone !== event.eventTimezone && (
+                <p className="text-sm text-slate-600 mb-3 rounded-lg bg-slate-100 border border-slate-200 px-3 py-2">
+                  These times are shown in your timezone. The poll was created in{" "}
+                  <span className="font-medium text-slate-700">{getTimezoneShortName(event.eventTimezone)}</span>.
+                </p>
+              )}
 
               <p className="text-sm text-slate-600 mb-3">
                 {event.disableIfNeeded
-                  ? "Click or drag to mark times: Great or Unavailable. On touch screens: hold 1 second on a cell, then drag to paint multiple."
-                  : "Click or drag to mark times: Great, If needed, or Unavailable. On touch screens: hold 1 second on a cell, then drag to paint multiple."}
+                  ? "Click or drag to mark times: Great or Unavailable (default). On touch screens: hold briefly on a cell, then drag to paint multiple."
+                  : "Click or drag to mark times: Great, If needed, or Unavailable (default). On touch screens: hold briefly on a cell, then drag to paint multiple."}
               </p>
 
               <AvailabilityGrid
                 dates={event.dates}
                 startHour={event.startHour}
                 endHour={event.endHour}
+                eventTimezone={event.eventTimezone}
+                viewerTimezone={timezone}
                 slotsGreat={slotsGreat}
                 slotsIfNeeded={slotsIfNeeded}
                 onSlotsChange={({ great, ifNeeded }) => {
@@ -444,6 +460,12 @@ export default function EventPage() {
             </div>
           ) : (
             <>
+              {event.eventTimezone && timezone !== event.eventTimezone && (
+                <p className="text-sm text-slate-600 mb-4 rounded-lg bg-slate-100 border border-slate-200 px-3 py-2">
+                  These times are shown in your timezone. The poll was created in{" "}
+                  <span className="font-medium text-slate-700">{getTimezoneShortName(event.eventTimezone)}</span>.
+                </p>
+              )}
               <div className="mb-4">
                 <h2 className="text-lg font-semibold text-slate-900 mb-1">
                   Group availability
@@ -462,7 +484,7 @@ export default function EventPage() {
                 </p>
               </div>
 
-              {topSlots.length > 0 && (
+              {topSlots.length > 0 && topSlots.some((s) => s.availableCount > 1) ? (
                 <div className="mb-5 rounded-xl bg-slate-50 border border-slate-200 p-4">
                   <h3 className="text-sm font-semibold text-slate-800 mb-2">
                     Recommended times
@@ -480,12 +502,22 @@ export default function EventPage() {
                     ))}
                   </ul>
                 </div>
-              )}
+              ) : topSlots.length > 0 ? (
+                <div className="mb-5 rounded-xl bg-amber-50 border border-amber-200 p-4">
+                  <p className="text-sm text-amber-800">
+                    {event.availability.length === 1
+                      ? "Only one response so far — no recommended times yet. Share the link to get more."
+                      : "No times work for everyone — there's no overlap in availability. Check the grid below to compare."}
+                  </p>
+                </div>
+              ) : null}
 
               <AvailabilityGrid
                 dates={event.dates}
                 startHour={event.startHour}
                 endHour={event.endHour}
+                eventTimezone={event.eventTimezone}
+                viewerTimezone={timezone}
                 availability={event.availability}
                 mode="view"
                 disableIfNeeded={event.disableIfNeeded}

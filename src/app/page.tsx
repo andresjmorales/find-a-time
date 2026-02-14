@@ -110,7 +110,7 @@ export default function Home() {
     <div className="w-full max-w-lg mx-auto px-4">
       <div className="text-center mb-8">
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2 tracking-tight">
-          Let's Find a Time!
+          Let’s Find a Time!
         </h1>
         <p className="text-slate-600">
           Create a link, share it, and see when everyone can meet.
@@ -155,36 +155,45 @@ export default function Home() {
         <label className="block text-sm font-medium text-slate-700 mb-2">
           What hours might work?
         </label>
+        <p className="text-xs text-slate-500 mb-2">
+          These times are the time boundaries for the poll. You’ll select your own availability on the next page.
+        </p>
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <span className="block text-xs text-slate-500 mb-1">No earlier than</span>
+            <select
+              value={startHour}
+              onChange={(e) => setStartHour(Number(e.target.value))}
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 outline-none text-slate-900"
+            >
+              {hourOptions.map((h) => (
+                <option key={h} value={h}>
+                  {formatHour(h)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <span className="text-slate-500 pt-5">–</span>
+          <div className="flex-1">
+            <span className="block text-xs text-slate-500 mb-1">No later than</span>
+            <select
+              value={endHour}
+              onChange={(e) => setEndHour(Number(e.target.value))}
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 outline-none text-slate-900"
+            >
+              {hourOptions.map((h) => (
+                <option key={h} value={h}>
+                  {formatHour(h)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         {creatorTimezone && (
-          <p className="text-xs text-slate-500 mb-2">
+          <p className="text-xs text-slate-500 mt-2">
             Your time zone: <span className="font-medium text-slate-600">{creatorTimezone}</span>
           </p>
         )}
-        <div className="flex items-center gap-2">
-          <select
-            value={startHour}
-            onChange={(e) => setStartHour(Number(e.target.value))}
-            className="flex-1 px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 outline-none text-slate-900"
-          >
-            {hourOptions.map((h) => (
-              <option key={h} value={h}>
-                {formatHour(h)}
-              </option>
-            ))}
-          </select>
-          <span className="text-slate-500">–</span>
-          <select
-            value={endHour}
-            onChange={(e) => setEndHour(Number(e.target.value))}
-            className="flex-1 px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 outline-none text-slate-900"
-          >
-            {hourOptions.map((h) => (
-              <option key={h} value={h}>
-                {formatHour(h)}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
       {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
@@ -195,7 +204,7 @@ export default function Home() {
         disabled={loading}
         className="w-full py-4 px-6 bg-violet-600 text-white text-lg font-semibold rounded-2xl shadow-lg shadow-violet-600/25 hover:bg-violet-700 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? "Creating…" : "Let's Find a Time!"}
+        {loading ? "Creating…" : "Let’s Find a Time!"}
       </button>
 
       {/* Advanced settings — discrete purple link, expandable */}
