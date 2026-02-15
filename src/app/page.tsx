@@ -42,7 +42,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [disableIfNeeded, setDisableIfNeeded] = useState(false);
-  const [ifNeededWeight, setIfNeededWeight] = useState(0.75);
+  const [ifNeededWeight, setIfNeededWeight] = useState(0.8);
   const [expirationEnabled, setExpirationEnabled] = useState(false);
   const [expiresAt, setExpiresAt] = useState("");
   const [hideResultsUntilExpiration, setHideResultsUntilExpiration] = useState(false);

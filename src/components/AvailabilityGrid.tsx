@@ -2,6 +2,7 @@
 
 import { Fragment, useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
+import { availabilityColors, UNAVAILABLE_HEX, getUnavailableGridBg, getUnavailableTextUnselectedHex } from "@/lib/availabilityColors";
 import { getSlotScoreValue, DEFAULT_IF_NEEDED_WEIGHT } from "@/lib/scoring";
 import { formatSlotTimeInTimezone } from "@/lib/timezones";
 
@@ -46,7 +47,7 @@ interface GroupAvailabilityGridProps {
   viewerTimezone?: string;
   /** When true, "If needed" slots are not counted in score (weight 0). */
   disableIfNeeded?: boolean;
-  /** Weight for "If needed" in scoring: 0–1, default 0.75. */
+  /** Weight for "If needed" in scoring: 0–1, default 0.8. */
   ifNeededWeight?: number;
 }
 
@@ -316,8 +317,8 @@ export default function AvailabilityGrid(props: Props) {
       // Single-participant view: use their actual choices (green / yellow / no fill)
       if (isSingleParticipant) {
         const a = p.availability[0];
-        if (a.slots.includes(slot)) return "rgb(22, 163, 74)"; // green-600 (Great)
-        if (a.slotsIfNeeded?.includes(slot)) return "rgb(250, 204, 21)"; // amber-400 (If needed)
+        if (a.slots.includes(slot)) return availabilityColors.great.rgb;
+        if (a.slotsIfNeeded?.includes(slot)) return availabilityColors.ifNeeded.rgb;
         return undefined; // unavailable → default bg
       }
       // Group view: white (zero) to green (opacity scale; darkest = best)
@@ -639,26 +640,41 @@ export default function AvailabilityGrid(props: Props) {
         <span className="text-sm text-slate-600">Mark as:</span>
         {(
           [
-            { value: "great" as const, label: "Great", bg: "bg-emerald-500" },
+            { value: "great" as const, label: "Great", bg: availabilityColors.great.bg, textUnselected: availabilityColors.great.textUnselected },
             ...(p.disableIfNeeded
               ? []
-              : [{ value: "ifNeeded" as const, label: "If needed", bg: "bg-amber-400" }]),
-            { value: "unavailable" as const, label: "Unavailable", bg: "bg-red-400" },
+              : [{ value: "ifNeeded" as const, label: "If needed", bg: availabilityColors.ifNeeded.bg, textUnselected: availabilityColors.ifNeeded.textUnselected }]),
+            { value: "unavailable" as const, label: "Unavailable", bg: undefined, textUnselected: availabilityColors.unavailable.textUnselected },
           ] as const
-        ).map(({ value, label, bg }) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setPaintAs(value)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-              paintAs === value
-                ? `${bg} text-white ring-2 ring-offset-2 ring-slate-300`
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        ).map(({ value, label, bg, textUnselected }) => {
+          const selected = paintAs === value;
+          const isUnavailable = value === "unavailable";
+          const style =
+            selected && isUnavailable
+              ? { backgroundColor: UNAVAILABLE_HEX }
+              : !selected && isUnavailable
+                ? { color: getUnavailableTextUnselectedHex() }
+                : undefined;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setPaintAs(value)}
+              style={style}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                selected
+                  ? isUnavailable
+                    ? "text-white ring-2 ring-offset-2 ring-slate-300"
+                    : `${bg} text-white ring-2 ring-offset-2 ring-slate-300`
+                  : isUnavailable
+                    ? "bg-slate-100 hover:bg-slate-200"
+                    : `bg-slate-100 ${textUnselected} hover:bg-slate-200`
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
         <span
           ref={scoringInfoRef}
           className="relative inline-flex cursor-help group/info ml-4"
@@ -807,11 +823,16 @@ export default function AvailabilityGrid(props: Props) {
                     <div
                       className={`absolute inset-0 border border-slate-200 transition-colors ${
                         great
-                          ? "bg-emerald-500"
+                          ? availabilityColors.great.bg
                           : ifNeeded
-                            ? "bg-amber-400"
-                            : "bg-red-300/70"
+                            ? availabilityColors.ifNeeded.bg
+                            : ""
                       }`}
+                      style={
+                        !great && !ifNeeded
+                          ? { backgroundColor: getUnavailableGridBg() }
+                          : undefined
+                      }
                     />
                   </div>
                 );

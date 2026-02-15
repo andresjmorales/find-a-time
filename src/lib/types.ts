@@ -8,7 +8,7 @@ export interface Event {
   createdAt: string;
   /** When true, respondents only see Great / Unavailable (no "If needed"). */
   disableIfNeeded?: boolean;
-  /** Weight for "If needed" in scoring: 0–1, default 0.75. Great = 1. Ignored when disableIfNeeded. */
+  /** Weight for "If needed" in scoring: 0–1, default 0.8. Great = 1. Ignored when disableIfNeeded. */
   ifNeededWeight?: number;
   /** When set, survey stops accepting new responses and may show expired view. ISO date string (e.g. YYYY-MM-DD). */
   expiresAt?: string;

@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 import { EventWithAvailability } from "@/lib/types";
 import { getTimezoneOptions, getTimezoneShortName, formatSlotLabelInTimezone, formatSlotTimeWithAbbrev } from "@/lib/timezones";
+import { availabilityColors, getUnavailableTextUnselectedHex } from "@/lib/availabilityColors";
 import { getSlotScoreValue, DEFAULT_IF_NEEDED_WEIGHT } from "@/lib/scoring";
 
 function getDefaultTimezone(): string {
@@ -58,6 +59,7 @@ function computeTopSlots(
   label: string;
   score: number;
   availableCount: number;
+  great: number;
   totalParticipants: number;
 }[] {
   if (!event.availability.length) return [];
@@ -115,6 +117,7 @@ function computeTopSlots(
       : formatSlotLabel(s.slot),
     score: s.score,
     availableCount: s.availableCount,
+    great: s.great,
     totalParticipants,
   }));
 }
@@ -379,9 +382,29 @@ export default function EventPage() {
               )}
 
               <p className="text-sm text-slate-600 mb-3">
-                {event.disableIfNeeded
-                  ? "Click or drag to mark times: Great or Unavailable (default). On touch screens: hold briefly on a cell, then drag to paint multiple."
-                  : "Click or drag to mark times: Great, If needed, or Unavailable (default). On touch screens: hold briefly on a cell, then drag to paint multiple."}
+                Click or drag to mark times:{" "}
+                {event.disableIfNeeded ? (
+                  <>
+                    <span className={`font-medium ${availabilityColors.great.textUnselected}`}>Great</span>
+                    {" or "}
+                    <span className="font-medium" style={{ color: getUnavailableTextUnselectedHex() }}>Unavailable</span>
+                    {" "}
+                    <span className="font-bold" style={{ color: getUnavailableTextUnselectedHex() }}>(default)</span>
+                    {". "}
+                  </>
+                ) : (
+                  <>
+                    <span className={`font-medium ${availabilityColors.great.textUnselected}`}>Great</span>
+                    {", "}
+                    <span className={`font-medium ${availabilityColors.ifNeeded.textUnselected}`}>If needed</span>
+                    {", or "}
+                    <span className="font-medium" style={{ color: getUnavailableTextUnselectedHex() }}>Unavailable</span>
+                    {" "}
+                    <span className="font-bold" style={{ color: getUnavailableTextUnselectedHex() }}>(default)</span>
+                    {". "}
+                  </>
+                )}
+                On touch screens: hold briefly on a cell, then drag to paint multiple.
               </p>
 
               <AvailabilityGrid
@@ -515,7 +538,9 @@ export default function EventPage() {
                           {slot.label}
                         </span>{" "}
                         <span className="text-slate-500">
-                          (works for {slot.availableCount}/{slot.totalParticipants})
+                          ({slot.great === slot.availableCount && slot.availableCount > 0
+                            ? `great for ${slot.availableCount}/${slot.totalParticipants}`
+                            : `works for ${slot.availableCount}/${slot.totalParticipants}`})
                         </span>
                       </li>
                     ))}
