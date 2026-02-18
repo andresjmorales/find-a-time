@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import DatePicker from "@/components/DatePicker";
 import { getTimezoneShortName } from "@/lib/timezones";
 
-/** Number of preset days selected by default: today, tomorrow, and the day after. */
+/** Number of preset days selected by default: today plus the next 2 days (3 days total). */
 export const DEFAULT_PRESET_DAYS_COUNT = 3;
 
 /** Maximum number of dates the user can select (easy to change for future use cases). */
@@ -14,9 +14,9 @@ export const MAX_PRESET_DAYS_LIMIT = 7;
 function getDefaultDates(): string[] {
   const dates: string[] = [];
   const today = new Date();
+  // Explicit: today + next (DEFAULT_PRESET_DAYS_COUNT - 1) days so we never use past dates
   for (let i = 0; i < DEFAULT_PRESET_DAYS_COUNT; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
     dates.push(
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
     );

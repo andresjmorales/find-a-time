@@ -121,6 +121,7 @@ export default function DatePicker({
                 ${isSelected ? "bg-emerald-500 text-white hover:bg-emerald-600" : ""}
                 ${dateStr === todayStr && !isSelected ? "ring-2 ring-emerald-300" : ""}
               `}
+              style={isSelected ? { backgroundColor: "#10b981", color: "#fff" } : undefined}
             >
               {day}
             </button>
