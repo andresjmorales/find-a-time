@@ -131,7 +131,7 @@ export default function EventPage() {
   const [error, setError] = useState("");
 
   const [participantName, setParticipantName] = useState("");
-  const [timezone, setTimezone] = useState(() => getDefaultTimezone());
+  const [timezone, setTimezone] = useState("");
   const [otherAvailabilityNote, setOtherAvailabilityNote] = useState("");
   const [slotsGreat, setSlotsGreat] = useState<string[]>([]);
   const [slotsIfNeeded, setSlotsIfNeeded] = useState<string[]>([]);
@@ -155,10 +155,11 @@ export default function EventPage() {
       !!event.hideResultsUntilExpiration && !!exp && !expired;
     if (expired || hideRes) setTab("results");
   }, [event?.id, event?.expiresAt, event?.hideResultsUntilExpiration]);
-  const timezoneOptions = useMemo(
-    () => getTimezoneOptions(timezone),
-    [timezone]
-  );
+  const timezoneOptions = useMemo(() => {
+    const opts = getTimezoneOptions(timezone);
+    if (!timezone) return [{ value: "", label: "Your time zone…" }, ...opts];
+    return opts;
+  }, [timezone]);
 
   const fetchEvent = useCallback(async () => {
     try {
@@ -176,6 +177,12 @@ export default function EventPage() {
   useEffect(() => {
     fetchEvent();
   }, [fetchEvent]);
+
+  // Default timezone must be set on the client so it uses the user's browser TZ.
+  // During SSR/build, useState runs on the server and would use the server timezone (e.g. UTC).
+  useEffect(() => {
+    setTimezone(getDefaultTimezone());
+  }, []);
 
   // Keep tab title in sync when event loads (e.g. after client fetch)
   useEffect(() => {

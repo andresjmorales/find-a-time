@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import DatePicker from "@/components/DatePicker";
-import { getTimezoneShortName } from "@/lib/timezones";
+import { getTimezoneShortName, getTimezoneOptions } from "@/lib/timezones";
 
 /** Number of preset days selected by default: today plus the next 2 days (3 days total). */
 export const DEFAULT_PRESET_DAYS_COUNT = 3;
@@ -34,7 +34,7 @@ function getCreatorTimezone(): string {
 export default function Home() {
   const router = useRouter();
   const [name, setName] = useState("Party");
-  const [dates, setDates] = useState<string[]>(() => getDefaultDates());
+  const [dates, setDates] = useState<string[]>([]);
   const [startHour, setStartHour] = useState(9);
   const [endHour, setEndHour] = useState(17);
   const [creatorTimezone, setCreatorTimezone] = useState("");
@@ -51,7 +51,19 @@ export default function Home() {
     setCreatorTimezone(getCreatorTimezone());
   }, []);
 
+  // Default dates must be set on the client so they use the user's "today".
+  // During SSR/build, useState runs on the server and would bake in build-time dates.
+  useEffect(() => {
+    setDates(getDefaultDates());
+  }, []);
+
   const hourOptions = Array.from({ length: 24 }, (_, i) => i);
+
+  const creatorTimezoneOptions = useMemo(() => {
+    const opts = getTimezoneOptions(creatorTimezone);
+    if (!creatorTimezone) return [{ value: "", label: "Your time zone…" }, ...opts];
+    return opts;
+  }, [creatorTimezone]);
 
   async function handleFindATime() {
     if (dates.length === 0) {
@@ -137,20 +149,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Event name */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-slate-700 mb-2">
-          Event name
-        </label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Meet at the dog park"
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
-        />
-      </div>
-
       {/* Hours + creator time zone */}
       <div className="mb-8">
         <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -190,16 +188,39 @@ export default function Home() {
             </select>
           </div>
         </div>
-        {creatorTimezone && (
-          <p className="text-xs text-slate-500 mt-2">
-            Your time zone: <span className="font-medium text-slate-600">{creatorTimezone} ({getTimezoneShortName(creatorTimezone)})</span>
-          </p>
-        )}
+        <div className="mt-3">
+          <span className="block text-xs text-slate-500 mb-1">Your time zone</span>
+          <select
+            value={creatorTimezone}
+            onChange={(e) => setCreatorTimezone(e.target.value)}
+            className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
+          >
+            {creatorTimezoneOptions.map((opt) => (
+              <option key={opt.value || "placeholder"} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Event name */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          Event name
+        </label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Meet at the dog park"
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-slate-900"
+        />
       </div>
 
       {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
-      {/* Create event — under the calendar view */}
+      {/* Create event */}
       <button
         onClick={handleFindATime}
         disabled={loading}
