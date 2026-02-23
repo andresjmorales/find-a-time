@@ -106,7 +106,11 @@ export default function Home() {
         setLoading(false);
         return;
       }
-      router.push(`/event/${data.id}`);
+      router.push(
+        creatorTimezone
+          ? `/event/${data.id}?tz=${encodeURIComponent(creatorTimezone)}`
+          : `/event/${data.id}`
+      );
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);

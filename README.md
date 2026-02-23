@@ -5,14 +5,15 @@
 ## How it works
 
 1. **Create an event** (home page)  
-   - Choose event name, dates (calendar, up to 7 days), and time range (e.g. 9 AM–5 PM).  
-   - Optionally set timezone, expiration date, and advanced options (disable “If needed”, weight for “If needed” in scoring, hide results until expiration).
+   - Choose dates (calendar, today + next 2 days by default, up to 7 days), time range (e.g. 9 AM–5 PM), and your time zone (dropdown; defaults to browser). Event name is last, right above the create button.  
+   - If you pick a time zone here, it’s pre-filled on the next screen so you don’t have to choose it twice. (If someone opens the shared link in a new tab, they see their own browser time zone.)  
+   - Optional: expiration date and advanced options (disable “If needed”, weight for “If needed” in scoring, hide results until expiration).
 
 2. **Share the link**  
    - You get a unique event URL (e.g. `/event/abc123`). Share it via WhatsApp, email, etc. The page title and Open Graph metadata include the event name for nice link previews.
 
 3. **Respondents add availability**  
-   - Open the link → **Add your availability** tab: pick timezone, then click or drag on the grid to mark slots as **Great** (green), **If needed** (yellow), or **Unavailable** (red). Optional free-text “Other availability” for times that don’t fit the grid. Name field sits just above **Submit availability**.
+   - Open the link → **Add your availability** tab: your time zone is detected (or pre-filled if you just created the event and chose one). Change it in the dropdown if needed, then click or drag on the grid to mark slots as **Great** (green), **If needed** (yellow), or **Unavailable** (red). Optional free-text “Other availability” for times that don’t fit the grid. Name field sits just above **Submit availability**.
 
 4. **View results**  
    - **Group results** tab: heatmap of who’s available when, plus **Top 3 suggested times** (scored by “Great” and “If needed” with configurable weight). Optional notes and “If needed” responses are summarized.
@@ -26,7 +27,7 @@
 
 ## Features
 
-- **Event options:** name, dates, hours, creator timezone, optional expiration.  
+- **Event options:** dates (default today + next 2 days), hours, timezone dropdown (pre-filled on availability screen when coming from creation), event name, optional expiration.  
 - **Respondent experience:** grid in event timezone; Great / If needed / Unavailable; optional “If needed” and configurable weight in scoring; optional free-text availability.  
 - **Results:** group availability grid, top 3 slots, optional “hide results until expiration.”  
 - **Storage:** in-memory/JSON for local dev; **Upstash Redis** (or Vercel KV) in production.

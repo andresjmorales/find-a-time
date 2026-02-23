@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useMemo as useReactMemo } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 import { EventWithAvailability } from "@/lib/types";
 import { getTimezoneOptions, getTimezoneShortName, formatSlotLabelInTimezone, formatSlotTimeWithAbbrev } from "@/lib/timezones";
@@ -125,6 +125,9 @@ function computeTopSlots(
 export default function EventPage() {
   const params = useParams();
   const id = params.id as string;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const [event, setEvent] = useState<EventWithAvailability | null>(null);
   const [loading, setLoading] = useState(true);
@@ -178,10 +181,18 @@ export default function EventPage() {
     fetchEvent();
   }, [fetchEvent]);
 
-  // Default timezone must be set on the client so it uses the user's browser TZ.
-  // During SSR/build, useState runs on the server and would use the server timezone (e.g. UTC).
+  // Default timezone: if creator just came from event creation with ?tz=, use that so they don't have to pick twice.
+  // Otherwise use browser timezone. Strip ?tz= from URL after reading so the share link is clean (new tab = browser TZ).
   useEffect(() => {
-    setTimezone(getDefaultTimezone());
+    const tzFromUrl = searchParams.get("tz");
+    const chosen = tzFromUrl?.trim();
+    setTimezone(chosen || getDefaultTimezone());
+    if (chosen) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("tz");
+      const q = next.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname);
+    }
   }, []);
 
   // Keep tab title in sync when event loads (e.g. after client fetch)
