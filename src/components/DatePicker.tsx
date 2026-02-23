@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface DatePickerProps {
   selectedDates: string[];
@@ -21,14 +21,30 @@ function formatDate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function getTodayStr(): string {
+  const d = new Date();
+  return formatDate(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 export default function DatePicker({
   selectedDates,
   onDatesChange,
   maxDates,
 }: DatePickerProps) {
-  const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  // Don't use server/build date: initial "" so we set "today" only on the client in useEffect.
+  // Otherwise SSR or static build can bake in server timezone (e.g. UTC), so "yesterday" stays selectable for users ahead of server.
+  const [todayStr, setTodayStr] = useState("");
+  const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+
+  useEffect(() => {
+    setTodayStr(getTodayStr());
+  }, []);
+  useEffect(() => {
+    const onVisible = () => setTodayStr(getTodayStr());
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
 
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDay = getFirstDayOfMonth(viewYear, viewMonth);
@@ -64,12 +80,6 @@ export default function DatePicker({
       setViewMonth(viewMonth + 1);
     }
   }
-
-  const todayStr = formatDate(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
 
   return (
     <div className="w-full max-w-sm">
@@ -108,7 +118,7 @@ export default function DatePicker({
           const day = i + 1;
           const dateStr = formatDate(viewYear, viewMonth, day);
           const isSelected = selectedDates.includes(dateStr);
-          const isPast = dateStr < todayStr;
+          const isPast = todayStr !== "" && dateStr < todayStr;
 
           return (
             <button
@@ -119,7 +129,7 @@ export default function DatePicker({
                 py-2 rounded-lg text-sm font-medium transition-all
                 ${isPast ? "text-gray-300 cursor-not-allowed" : "cursor-pointer hover:bg-emerald-50"}
                 ${isSelected ? "bg-emerald-500 text-white hover:bg-emerald-600" : ""}
-                ${dateStr === todayStr && !isSelected ? "ring-2 ring-emerald-300" : ""}
+                ${todayStr && dateStr === todayStr && !isSelected ? "ring-2 ring-emerald-300" : ""}
               `}
               style={isSelected ? { backgroundColor: "#10b981", color: "#fff" } : undefined}
             >
