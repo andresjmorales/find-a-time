@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
+import { Fragment, useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { availabilityColors, UNAVAILABLE_HEX, getUnavailableGridBg, getUnavailableTextUnselectedHex } from "@/lib/availabilityColors";
 import { getSlotScoreValue, DEFAULT_IF_NEEDED_WEIGHT } from "@/lib/scoring";
@@ -72,25 +72,78 @@ function slotKey(date: string, hour: number, half: number): string {
   return `${date}T${String(hour).padStart(2, "0")}:${half === 0 ? "00" : "30"}`;
 }
 
-export default function AvailabilityGrid(props: Props) {
-  const { dates, startHour, endHour, mode } = props;
-  const [isDragging, setIsDragging] = useState(false);
-  const [paintAs, setPaintAs] = useState<SlotMark>("great");
-  const dragApplyRef = useRef<SlotMark>("great");
+function SlotTooltip({
+  tooltipRef,
+  tooltipAnchorRect,
+  greatNames,
+  ifNeededNames,
+  unavailableNames,
+}: {
+  tooltipRef: React.RefObject<HTMLDivElement | null>;
+  tooltipAnchorRect: DOMRect;
+  greatNames: string[];
+  ifNeededNames: string[];
+  unavailableNames: string[];
+}) {
+  const cellCenter = tooltipAnchorRect.left + tooltipAnchorRect.width / 2;
+  const bottom = window.innerHeight - tooltipAnchorRect.top + 4;
+  const hasAny =
+    greatNames.length || ifNeededNames.length || unavailableNames.length;
 
-  // View mode: tap-to-show tooltip (for touch devices where hover doesn't work)
+  return (
+    <div
+      ref={tooltipRef}
+      className="fixed z-50 px-2.5 py-2 bg-slate-800 text-white text-xs rounded shadow-lg text-left pointer-events-none"
+      style={{
+        left: cellCenter,
+        bottom,
+        transform: "translateX(-50%)",
+        width: "max-content",
+        minWidth: TOOLTIP_MIN_WIDTH,
+        maxWidth: Math.min(TOOLTIP_MAX_WIDTH, window.innerWidth - 16),
+      }}
+    >
+      {hasAny ? (
+        <>
+          {greatNames.length > 0 && (
+            <p className="mb-1.5 last:mb-0">
+              <span className="font-semibold text-slate-200">Great:</span>{" "}
+              <span className="text-white">{greatNames.join(", ")}</span>
+            </p>
+          )}
+          {ifNeededNames.length > 0 && (
+            <p className="mb-1.5 last:mb-0">
+              <span className="font-semibold text-slate-200">If needed:</span>{" "}
+              <span className="text-white">{ifNeededNames.join(", ")}</span>
+            </p>
+          )}
+          {unavailableNames.length > 0 && (
+            <p className="mb-0">
+              <span className="font-semibold text-slate-200">Unavailable:</span>{" "}
+              <span className="text-white">{unavailableNames.join(", ")}</span>
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="mb-0">No one available</p>
+      )}
+    </div>
+  );
+}
+
+export default function AvailabilityGrid(props: Props) {
+  if (props.mode === "view") return <AvailabilityGridView {...props} />;
+  return <AvailabilityGridInput {...props} />;
+}
+
+function AvailabilityGridView(props: GroupAvailabilityGridProps) {
+  const { dates, startHour, endHour } = props;
   const [activeTooltipSlot, setActiveTooltipSlot] = useState<string | null>(null);
   const [tooltipAnchorRect, setTooltipAnchorRect] = useState<DOMRect | null>(null);
   const viewGridRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
-  // Input mode: scoring info tooltip (portal, viewport-aware)
-  const scoringInfoRef = useRef<HTMLElement>(null);
-  const scoringInfoTooltipRef = useRef<HTMLDivElement>(null);
-  const [scoringInfoVisible, setScoringInfoVisible] = useState(false);
-  const [scoringInfoAnchorRect, setScoringInfoAnchorRect] = useState<DOMRect | null>(null);
   useEffect(() => {
-    if (mode !== "view") return;
     const close = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
       if (viewGridRef.current && !viewGridRef.current.contains(target)) {
@@ -104,7 +157,276 @@ export default function AvailabilityGrid(props: Props) {
       document.removeEventListener("mousedown", close);
       document.removeEventListener("touchstart", close);
     };
-  }, [mode]);
+  }, []);
+
+  // Hide tooltip when grid scrolls (cell moves, tooltip would be misaligned)
+  useEffect(() => {
+    if (!activeTooltipSlot) return;
+    const el = viewGridRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      setActiveTooltipSlot(null);
+      setTooltipAnchorRect(null);
+    };
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [activeTooltipSlot]);
+
+  // Nudge tooltip to stay within grid container (not viewport margins)
+  useLayoutEffect(() => {
+    if (!activeTooltipSlot || !tooltipRef.current || !viewGridRef.current) return;
+    const el = tooltipRef.current;
+    const gridRect = viewGridRef.current.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    const pad = 8;
+    if (r.left < gridRect.left + pad) {
+      el.style.left = `${gridRect.left + pad}px`;
+      el.style.transform = "none";
+    } else if (r.right > gridRect.right - pad) {
+      el.style.left = `${gridRect.right - el.offsetWidth - pad}px`;
+      el.style.transform = "none";
+    }
+  }, [activeTooltipSlot, tooltipAnchorRect]);
+
+  function showTooltip(slot: string, cell: HTMLElement) {
+    setActiveTooltipSlot(slot);
+    setTooltipAnchorRect(cell.getBoundingClientRect());
+  }
+
+  function hideTooltip() {
+    setActiveTooltipSlot(null);
+    setTooltipAnchorRect(null);
+  }
+
+  const hours: number[] = [];
+  for (let h = startHour; h < endHour; h++) {
+    hours.push(h);
+  }
+
+  const eventTz = props.eventTimezone;
+  const viewerTz = props.viewerTimezone;
+  const showTimesInViewerTz =
+    !!eventTz &&
+    !!viewerTz &&
+    eventTz !== viewerTz &&
+    dates.length > 0;
+  const firstDate = dates[0] ?? "";
+
+  function getTimeLabel(hour: number, half: 0 | 1): string {
+    if (showTimesInViewerTz) {
+      return formatSlotTimeInTimezone(
+        firstDate,
+        hour,
+        half,
+        eventTz!,
+        viewerTz!
+      );
+    }
+    return half === 0 ? formatHour(hour) : "";
+  }
+
+  const totalParticipants = props.availability.length;
+
+  function getSlotCounts(slot: string): { great: number; ifNeeded: number } {
+    let great = 0;
+    let ifNeeded = 0;
+    for (const a of props.availability) {
+      if (a.slots.includes(slot)) great++;
+      else if (a.slotsIfNeeded?.includes(slot)) ifNeeded++;
+    }
+    return { great, ifNeeded };
+  }
+
+  function getSlotTooltipNames(slot: string): {
+    great: string[];
+    ifNeeded: string[];
+    unavailable: string[];
+  } {
+    const great: string[] = [];
+    const ifNeeded: string[] = [];
+    for (const a of props.availability) {
+      if (a.slots.includes(slot)) great.push(a.participantName);
+      else if (a.slotsIfNeeded?.includes(slot)) ifNeeded.push(a.participantName);
+    }
+    const unavailable = props.availability
+      .map((a) => a.participantName)
+      .filter((n) => !great.includes(n) && !ifNeeded.includes(n));
+    return { great, ifNeeded, unavailable };
+  }
+
+  // Pre-compute min/max scores across all slots with any availability
+  const scoreCache = new Map<string, number>();
+  let minScore = Number.POSITIVE_INFINITY;
+  let maxScore = 0;
+
+  const weight =
+    props.disableIfNeeded ? 0 : (props.ifNeededWeight ?? DEFAULT_IF_NEEDED_WEIGHT);
+  for (const date of dates) {
+    for (const hour of hours) {
+      for (const half of [0, 1] as const) {
+        const slot = slotKey(date, hour, half);
+        const { great, ifNeeded } = getSlotCounts(slot);
+        if (great === 0 && ifNeeded === 0) continue;
+        const score = getSlotScoreValue(great, ifNeeded, weight);
+        scoreCache.set(slot, score);
+        if (score < minScore) minScore = score;
+        if (score > maxScore) maxScore = score;
+      }
+    }
+  }
+
+  const hasScoredSlots = maxScore > 0 && minScore !== Number.POSITIVE_INFINITY;
+  const isSingleParticipant = props.availability.length === 1;
+
+  function getCellColor(slot: string, score: number | undefined): string | undefined {
+    // Single-participant view: use their actual choices (green / yellow / no fill)
+    if (isSingleParticipant) {
+      const a = props.availability[0];
+      if (a.slots.includes(slot)) return availabilityColors.great.rgb;
+      if (a.slotsIfNeeded?.includes(slot)) return availabilityColors.ifNeeded.rgb;
+      return undefined; // unavailable → default bg
+    }
+    // Group view: white (zero) to green (opacity scale; darkest = best)
+    if (!hasScoredSlots || score === undefined) return undefined;
+    const greenRgb = { r: 22, g: 163, b: 74 }; // green-600
+    if (maxScore === minScore) return `rgb(${greenRgb.r}, ${greenRgb.g}, ${greenRgb.b})`;
+    const t = (score - minScore) / (maxScore - minScore); // 0 = worst, 1 = best
+    const opacity = 0.2 + 0.8 * t; // worst = 0.2, best = 1
+    return `rgba(${greenRgb.r}, ${greenRgb.g}, ${greenRgb.b}, ${opacity})`;
+  }
+
+  return (
+    <div>
+      <div ref={viewGridRef} className="overflow-x-auto">
+        <div
+          className="inline-grid gap-0 pt-3"
+          style={{
+            gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
+          }}
+        >
+        <div className="sticky left-0 z-[5] bg-white" />
+        {dates.map((date) => (
+          <div
+            key={date}
+            className="text-center text-xs font-medium text-slate-600 pb-2 px-1"
+          >
+            {formatDateHeader(date)}
+          </div>
+        ))}
+
+        {hours.map((hour, hourIndex) => (
+          <Fragment key={hour}>
+            {showTimesInViewerTz ? (
+              ([0, 1] as const).map((half) => (
+                <div
+                  key={half}
+                  className="sticky left-0 z-[5] bg-white col-start-1 min-h-0 relative"
+                  style={{ gridRow: `${2 + hourIndex * 2 + half} / span 1` }}
+                >
+                  <span
+                    className="absolute right-3 top-0 text-xs text-slate-500"
+                    style={{ transform: "translateY(-0.5rem)" }}
+                  >
+                    {getTimeLabel(hour, half)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div
+                className="sticky left-0 z-[5] bg-white col-start-1 min-h-0 relative"
+                style={{ gridRow: `${2 + hourIndex * 2} / span 2` }}
+              >
+                <span
+                  className="absolute right-3 top-0 text-xs text-slate-500"
+                  style={{ transform: "translateY(-0.5rem)" }}
+                >
+                  {getTimeLabel(hour, 0)}
+                </span>
+              </div>
+            )}
+            {[0, 1].map((half) =>
+              dates.map((date) => {
+                const slot = slotKey(date, hour, half);
+                const score = scoreCache.get(slot);
+                const { great: greatNames, ifNeeded: ifNeededNames, unavailable: unavailableNames } =
+                  getSlotTooltipNames(slot);
+                const hasAny =
+                  greatNames.length || ifNeededNames.length || unavailableNames.length;
+                const cellColor = getCellColor(slot, score);
+                const isEmpty = !hasAny;
+                const isActive = activeTooltipSlot === slot;
+
+                return (
+                  <div
+                    key={slot}
+                    data-slot={slot}
+                    role="button"
+                    tabIndex={0}
+                    className={`h-6 border border-slate-200 transition-colors cursor-default group relative ${
+                      isEmpty ? "bg-slate-50" : ""
+                    }`}
+                    style={cellColor ? { backgroundColor: cellColor } : undefined}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isActive) hideTooltip();
+                      else showTooltip(slot, e.currentTarget as HTMLElement);
+                    }}
+                    onMouseEnter={(e) => showTooltip(slot, e.currentTarget as HTMLElement)}
+                    onMouseLeave={hideTooltip}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        if (isActive) hideTooltip();
+                        else {
+                          const el = (e.target as HTMLElement).closest("[data-slot]") as HTMLElement;
+                          if (el) showTooltip(slot, el);
+                        }
+                      }
+                    }}
+                  >
+                    {/* Tooltip content rendered in portal below */}
+                  </div>
+                );
+              })
+            )}
+          </Fragment>
+        ))}
+        </div>
+      </div>
+      {totalParticipants > 0 && (
+        <p className="mt-4 text-xs text-slate-500">
+          Darker green = more people available; lightest green = fewer.
+        </p>
+      )}
+
+      {activeTooltipSlot &&
+        tooltipAnchorRect &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <SlotTooltip
+            tooltipRef={tooltipRef}
+            tooltipAnchorRect={tooltipAnchorRect}
+            greatNames={getSlotTooltipNames(activeTooltipSlot).great}
+            ifNeededNames={getSlotTooltipNames(activeTooltipSlot).ifNeeded}
+            unavailableNames={getSlotTooltipNames(activeTooltipSlot).unavailable}
+          />,
+          document.body
+        )}
+    </div>
+  );
+}
+
+function AvailabilityGridInput(props: AvailabilityGridInputProps) {
+  const { dates, startHour, endHour } = props;
+  const [isDragging, setIsDragging] = useState(false);
+  const [paintAs, setPaintAs] = useState<SlotMark>("great");
+  const dragApplyRef = useRef<SlotMark>("great");
+
+  // Input mode: scoring info tooltip (portal, viewport-aware)
+  const scoringInfoRef = useRef<HTMLElement>(null);
+  const scoringInfoTooltipRef = useRef<HTMLDivElement>(null);
+  const [scoringInfoVisible, setScoringInfoVisible] = useState(false);
+  const [scoringInfoAnchorRect, setScoringInfoAnchorRect] = useState<DOMRect | null>(null);
 
   // Close scoring info tooltip when clicking outside (including touch)
   useEffect(() => {
@@ -124,35 +446,6 @@ export default function AvailabilityGrid(props: Props) {
     };
   }, [scoringInfoVisible]);
 
-  // Hide tooltip when grid scrolls (cell moves, tooltip would be misaligned)
-  useEffect(() => {
-    if (mode !== "view" || !activeTooltipSlot) return;
-    const el = viewGridRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      setActiveTooltipSlot(null);
-      setTooltipAnchorRect(null);
-    };
-    el.addEventListener("scroll", onScroll);
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [mode, activeTooltipSlot]);
-
-  // Nudge tooltip to stay within grid container (not viewport margins)
-  useLayoutEffect(() => {
-    if (mode !== "view" || !activeTooltipSlot || !tooltipRef.current || !viewGridRef.current) return;
-    const el = tooltipRef.current;
-    const gridRect = viewGridRef.current.getBoundingClientRect();
-    const r = el.getBoundingClientRect();
-    const pad = 8;
-    if (r.left < gridRect.left + pad) {
-      el.style.left = `${gridRect.left + pad}px`;
-      el.style.transform = "none";
-    } else if (r.right > gridRect.right - pad) {
-      el.style.left = `${gridRect.right - el.offsetWidth - pad}px`;
-      el.style.transform = "none";
-    }
-  }, [mode, activeTooltipSlot, tooltipAnchorRect]);
-
   // Nudge scoring info tooltip to stay within viewport (away from edges)
   useLayoutEffect(() => {
     if (!scoringInfoVisible || !scoringInfoTooltipRef.current) return;
@@ -167,16 +460,6 @@ export default function AvailabilityGrid(props: Props) {
       el.style.transform = "none";
     }
   }, [scoringInfoVisible, scoringInfoAnchorRect]);
-
-  function showTooltip(slot: string, cell: HTMLElement) {
-    setActiveTooltipSlot(slot);
-    setTooltipAnchorRect(cell.getBoundingClientRect());
-  }
-
-  function hideTooltip() {
-    setActiveTooltipSlot(null);
-    setTooltipAnchorRect(null);
-  }
 
   // Input mode: long-press then drag to paint on touch (avoids conflicting with scroll)
   const touchLongPressTimerRef = useRef<number | null>(null);
@@ -199,9 +482,8 @@ export default function AvailabilityGrid(props: Props) {
     return cell?.getAttribute("data-slot") ?? null;
   }
 
-  // touchmove with passive: false so we can preventDefault when painting (input mode only)
+  // touchmove with passive: false so we can preventDefault when painting
   useEffect(() => {
-    if (mode !== "input") return;
     const el = inputGridRef.current;
     if (!el) return;
     const onTouchMove = (e: TouchEvent) => {
@@ -229,15 +511,15 @@ export default function AvailabilityGrid(props: Props) {
     };
     el.addEventListener("touchmove", onTouchMove, { passive: false });
     return () => el.removeEventListener("touchmove", onTouchMove);
-  }, [mode]);
+  }, []);
 
   const hours: number[] = [];
   for (let h = startHour; h < endHour; h++) {
     hours.push(h);
   }
 
-  const eventTz = "eventTimezone" in props ? props.eventTimezone : undefined;
-  const viewerTz = "viewerTimezone" in props ? props.viewerTimezone : undefined;
+  const eventTz = props.eventTimezone;
+  const viewerTz = props.viewerTimezone;
   const showTimesInViewerTz =
     !!eventTz &&
     !!viewerTz &&
@@ -258,247 +540,24 @@ export default function AvailabilityGrid(props: Props) {
     return half === 0 ? formatHour(hour) : "";
   }
 
-  if (mode === "view") {
-    const p = props as GroupAvailabilityGridProps;
-    const totalParticipants = p.availability.length;
+  const others = useMemo(() => props.othersAvailability ?? [], [props.othersAvailability]);
 
-    function getSlotCounts(slot: string): { great: number; ifNeeded: number } {
-      let great = 0;
-      let ifNeeded = 0;
-      for (const a of p.availability) {
-        if (a.slots.includes(slot)) great++;
-        else if (a.slotsIfNeeded?.includes(slot)) ifNeeded++;
-      }
-      return { great, ifNeeded };
-    }
+  // Keep latest slot arrays in refs so drag-paint doesn't lose cells to stale closures.
+  const slotsGreatRef = useRef(props.slotsGreat);
+  const slotsIfNeededRef = useRef(props.slotsIfNeeded);
+  useEffect(() => {
+    slotsGreatRef.current = props.slotsGreat;
+    slotsIfNeededRef.current = props.slotsIfNeeded;
+  }, [props.slotsGreat, props.slotsIfNeeded]);
 
-    function getSlotTooltipNames(slot: string): {
-      great: string[];
-      ifNeeded: string[];
-      unavailable: string[];
-    } {
-      const great: string[] = [];
-      const ifNeeded: string[] = [];
-      for (const a of p.availability) {
-        if (a.slots.includes(slot)) great.push(a.participantName);
-        else if (a.slotsIfNeeded?.includes(slot)) ifNeeded.push(a.participantName);
-      }
-      const unavailable = p.availability
-        .map((a) => a.participantName)
-        .filter((n) => !great.includes(n) && !ifNeeded.includes(n));
-      return { great, ifNeeded, unavailable };
-    }
-
-    // Pre-compute min/max scores across all slots with any availability
-    const scoreCache = new Map<string, number>();
-    let minScore = Number.POSITIVE_INFINITY;
-    let maxScore = 0;
-
-    const weight =
-      p.disableIfNeeded ? 0 : (p.ifNeededWeight ?? DEFAULT_IF_NEEDED_WEIGHT);
-    for (const date of dates) {
-      for (const hour of hours) {
-        for (const half of [0, 1] as const) {
-          const slot = slotKey(date, hour, half);
-          const { great, ifNeeded } = getSlotCounts(slot);
-          if (great === 0 && ifNeeded === 0) continue;
-          const score = getSlotScoreValue(great, ifNeeded, weight);
-          scoreCache.set(slot, score);
-          if (score < minScore) minScore = score;
-          if (score > maxScore) maxScore = score;
-        }
-      }
-    }
-
-    const hasScoredSlots = maxScore > 0 && minScore !== Number.POSITIVE_INFINITY;
-    const isSingleParticipant = p.availability.length === 1;
-
-    function getCellColor(slot: string, score: number | undefined): string | undefined {
-      // Single-participant view: use their actual choices (green / yellow / no fill)
-      if (isSingleParticipant) {
-        const a = p.availability[0];
-        if (a.slots.includes(slot)) return availabilityColors.great.rgb;
-        if (a.slotsIfNeeded?.includes(slot)) return availabilityColors.ifNeeded.rgb;
-        return undefined; // unavailable → default bg
-      }
-      // Group view: white (zero) to green (opacity scale; darkest = best)
-      if (!hasScoredSlots || score === undefined) return undefined;
-      const greenRgb = { r: 22, g: 163, b: 74 }; // green-600
-      if (maxScore === minScore) return `rgb(${greenRgb.r}, ${greenRgb.g}, ${greenRgb.b})`;
-      const t = (score - minScore) / (maxScore - minScore); // 0 = worst, 1 = best
-      const opacity = 0.2 + 0.8 * t; // worst = 0.2, best = 1
-      return `rgba(${greenRgb.r}, ${greenRgb.g}, ${greenRgb.b}, ${opacity})`;
-    }
-
-    return (
-      <div>
-        <div ref={viewGridRef} className="overflow-x-auto">
-          <div
-            className="inline-grid gap-0 pt-3"
-            style={{
-              gridTemplateColumns: `80px repeat(${dates.length}, minmax(100px, 1fr))`,
-            }}
-          >
-          <div className="sticky left-0 z-[5] bg-white" />
-          {dates.map((date) => (
-            <div
-              key={date}
-              className="text-center text-xs font-medium text-slate-600 pb-2 px-1"
-            >
-              {formatDateHeader(date)}
-            </div>
-          ))}
-
-          {hours.map((hour, hourIndex) => (
-            <Fragment key={hour}>
-              {showTimesInViewerTz ? (
-                ([0, 1] as const).map((half) => (
-                  <div
-                    key={half}
-                    className="sticky left-0 z-[5] bg-white col-start-1 min-h-0 relative"
-                    style={{ gridRow: `${2 + hourIndex * 2 + half} / span 1` }}
-                  >
-                    <span
-                      className="absolute right-3 top-0 text-xs text-slate-500"
-                      style={{ transform: "translateY(-0.5rem)" }}
-                    >
-                      {getTimeLabel(hour, half)}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div
-                  className="sticky left-0 z-[5] bg-white col-start-1 min-h-0 relative"
-                  style={{ gridRow: `${2 + hourIndex * 2} / span 2` }}
-                >
-                  <span
-                    className="absolute right-3 top-0 text-xs text-slate-500"
-                    style={{ transform: "translateY(-0.5rem)" }}
-                  >
-                    {getTimeLabel(hour, 0)}
-                  </span>
-                </div>
-              )}
-              {[0, 1].map((half) =>
-                dates.map((date) => {
-                  const slot = slotKey(date, hour, half);
-                  const { great, ifNeeded } = getSlotCounts(slot);
-                  const score = scoreCache.get(slot);
-                  const { great: greatNames, ifNeeded: ifNeededNames, unavailable: unavailableNames } =
-                    getSlotTooltipNames(slot);
-                  const hasAny =
-                    greatNames.length || ifNeededNames.length || unavailableNames.length;
-                  const cellColor = getCellColor(slot, score);
-                  const isEmpty = !hasAny;
-                  const isActive = activeTooltipSlot === slot;
-
-                  return (
-                    <div
-                      key={slot}
-                      data-slot={slot}
-                      role="button"
-                      tabIndex={0}
-                      className={`h-6 border border-slate-200 transition-colors cursor-default group relative ${
-                        isEmpty ? "bg-slate-50" : ""
-                      }`}
-                      style={cellColor ? { backgroundColor: cellColor } : undefined}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isActive) hideTooltip();
-                        else showTooltip(slot, e.currentTarget as HTMLElement);
-                      }}
-                      onMouseEnter={(e) => showTooltip(slot, e.currentTarget as HTMLElement)}
-                      onMouseLeave={hideTooltip}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          if (isActive) hideTooltip();
-                          else {
-                            const el = (e.target as HTMLElement).closest("[data-slot]") as HTMLElement;
-                            if (el) showTooltip(slot, el);
-                          }
-                        }
-                      }}
-                    >
-                      {/* Tooltip content rendered in portal below */}
-                    </div>
-                  );
-                })
-              )}
-            </Fragment>
-          ))}
-          </div>
-        </div>
-        {totalParticipants > 0 && (
-          <p className="mt-4 text-xs text-slate-500">
-            Darker green = more people available; lightest green = fewer.
-          </p>
-        )}
-
-        {activeTooltipSlot &&
-          tooltipAnchorRect &&
-          typeof document !== "undefined" &&
-          createPortal(
-            (() => {
-              const rect = tooltipAnchorRect;
-              const cellCenter = rect.left + rect.width / 2;
-              const bottom = window.innerHeight - rect.top + 4;
-              const gridWidth = viewGridRef.current?.getBoundingClientRect().width ?? Infinity;
-
-              const { great: greatNames, ifNeeded: ifNeededNames, unavailable: unavailableNames } =
-                getSlotTooltipNames(activeTooltipSlot);
-              const hasAny =
-                greatNames.length || ifNeededNames.length || unavailableNames.length;
-
-              return (
-                <div
-                  ref={tooltipRef}
-                  className="fixed z-50 px-2.5 py-2 bg-slate-800 text-white text-xs rounded shadow-lg text-left pointer-events-none"
-                  style={{
-                    left: cellCenter,
-                    bottom,
-                    transform: "translateX(-50%)",
-                    width: "max-content",
-                    minWidth: TOOLTIP_MIN_WIDTH,
-                    maxWidth: Math.min(TOOLTIP_MAX_WIDTH, gridWidth - 16, window.innerWidth - 16),
-                  }}
-                >
-                  {hasAny ? (
-                    <>
-                      {greatNames.length > 0 && (
-                        <p className="mb-1.5 last:mb-0">
-                          <span className="font-semibold text-slate-200">Great:</span>{" "}
-                          <span className="text-white">{greatNames.join(", ")}</span>
-                        </p>
-                      )}
-                      {ifNeededNames.length > 0 && (
-                        <p className="mb-1.5 last:mb-0">
-                          <span className="font-semibold text-slate-200">If needed:</span>{" "}
-                          <span className="text-white">{ifNeededNames.join(", ")}</span>
-                        </p>
-                      )}
-                      {unavailableNames.length > 0 && (
-                        <p className="mb-0">
-                          <span className="font-semibold text-slate-200">Unavailable:</span>{" "}
-                          <span className="text-white">{unavailableNames.join(", ")}</span>
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="mb-0">No one available</p>
-                  )}
-                </div>
-              );
-            })(),
-            document.body
-          )}
-      </div>
-    );
-  }
-
-  // Input mode
-  const p = props as AvailabilityGridInputProps;
-  const others = p.othersAvailability ?? [];
+  const emitSlots = useCallback(
+    (great: string[], ifNeeded: string[]) => {
+      slotsGreatRef.current = great;
+      slotsIfNeededRef.current = ifNeeded;
+      props.onSlotsChange({ great, ifNeeded });
+    },
+    [props]
+  );
 
   const getOthersCount = useCallback(
     (slot: string): number => {
@@ -520,75 +579,79 @@ export default function AvailabilityGrid(props: Props) {
       setIsDragging(true);
       dragApplyRef.current = paintAs;
 
-      const inGreat = p.slotsGreat.includes(slot);
-      const inIfNeeded = p.slotsIfNeeded.includes(slot);
+      const great = slotsGreatRef.current;
+      const ifNeeded = slotsIfNeededRef.current;
+      const inGreat = great.includes(slot);
+      const inIfNeeded = ifNeeded.includes(slot);
 
       if (paintAs === "unavailable") {
-        p.onSlotsChange({
-          great: p.slotsGreat.filter((s) => s !== slot),
-          ifNeeded: p.slotsIfNeeded.filter((s) => s !== slot),
-        });
+        emitSlots(
+          great.filter((s) => s !== slot),
+          ifNeeded.filter((s) => s !== slot)
+        );
         return;
       }
       if (paintAs === "great") {
-        p.onSlotsChange({
-          great: inGreat
-            ? p.slotsGreat.filter((s) => s !== slot)
-            : [...p.slotsGreat.filter((s) => s !== slot), slot],
-          ifNeeded: p.slotsIfNeeded.filter((s) => s !== slot),
-        });
+        emitSlots(
+          inGreat ? great.filter((s) => s !== slot) : [...great.filter((s) => s !== slot), slot],
+          ifNeeded.filter((s) => s !== slot)
+        );
         return;
       }
       // ifNeeded
-      p.onSlotsChange({
-        great: p.slotsGreat.filter((s) => s !== slot),
-        ifNeeded: inIfNeeded
-          ? p.slotsIfNeeded.filter((s) => s !== slot)
-          : [...p.slotsIfNeeded.filter((s) => s !== slot), slot],
-      });
+      emitSlots(
+        great.filter((s) => s !== slot),
+        inIfNeeded
+          ? ifNeeded.filter((s) => s !== slot)
+          : [...ifNeeded.filter((s) => s !== slot), slot]
+      );
     },
-    [paintAs, p]
+    [paintAs, emitSlots]
   );
 
   const handleMouseEnter = useCallback(
     (slot: string) => {
       if (!isDragging) return;
       const mark = dragApplyRef.current;
+      const great = slotsGreatRef.current;
+      const ifNeeded = slotsIfNeededRef.current;
 
       if (mark === "unavailable") {
-        p.onSlotsChange({
-          great: p.slotsGreat.filter((s) => s !== slot),
-          ifNeeded: p.slotsIfNeeded.filter((s) => s !== slot),
-        });
+        emitSlots(
+          great.filter((s) => s !== slot),
+          ifNeeded.filter((s) => s !== slot)
+        );
         return;
       }
       if (mark === "great") {
-        if (!p.slotsGreat.includes(slot)) {
-          p.onSlotsChange({
-            great: [...p.slotsGreat, slot],
-            ifNeeded: p.slotsIfNeeded.filter((s) => s !== slot),
-          });
+        if (!great.includes(slot)) {
+          emitSlots(
+            [...great, slot],
+            ifNeeded.filter((s) => s !== slot)
+          );
         }
         return;
       }
-      if (!p.slotsIfNeeded.includes(slot)) {
-        p.onSlotsChange({
-          great: p.slotsGreat.filter((s) => s !== slot),
-          ifNeeded: [...p.slotsIfNeeded, slot],
-        });
+      if (!ifNeeded.includes(slot)) {
+        emitSlots(
+          great.filter((s) => s !== slot),
+          [...ifNeeded, slot]
+        );
       }
     },
-    [isDragging, p]
+    [isDragging, emitSlots]
   );
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
   }, []);
 
-  paintHandlersRef.current = { handleMouseDown, handleMouseEnter, handleMouseUp };
+  useEffect(() => {
+    paintHandlersRef.current = { handleMouseDown, handleMouseEnter, handleMouseUp };
+  }, [handleMouseDown, handleMouseEnter, handleMouseUp]);
 
-  const inGreat = (slot: string) => p.slotsGreat.includes(slot);
-  const inIfNeeded = (slot: string) => p.slotsIfNeeded.includes(slot);
+  const inGreat = (slot: string) => props.slotsGreat.includes(slot);
+  const inIfNeeded = (slot: string) => props.slotsIfNeeded.includes(slot);
   const othersCount = others.length;
 
   const handleTouchStart = useCallback(
@@ -641,7 +704,7 @@ export default function AvailabilityGrid(props: Props) {
         {(
           [
             { value: "great" as const, label: "Great", bg: availabilityColors.great.bg, textUnselected: availabilityColors.great.textUnselected },
-            ...(p.disableIfNeeded
+            ...(props.disableIfNeeded
               ? []
               : [{ value: "ifNeeded" as const, label: "If needed", bg: availabilityColors.ifNeeded.bg, textUnselected: availabilityColors.ifNeeded.textUnselected }]),
             { value: "unavailable" as const, label: "Unavailable", bg: undefined, textUnselected: availabilityColors.unavailable.textUnselected },
@@ -728,9 +791,9 @@ export default function AvailabilityGrid(props: Props) {
                   maxWidth: Math.min(280, window.innerWidth - 32),
                 }}
               >
-                {p.disableIfNeeded
+                {props.disableIfNeeded
                   ? "Only Great and Unavailable are used for ranking."
-                  : `Great = 1; If needed = ${(p.ifNeededWeight ?? DEFAULT_IF_NEEDED_WEIGHT).toFixed(2)} when ranking times.`}
+                  : `Great = 1; If needed = ${(props.ifNeededWeight ?? DEFAULT_IF_NEEDED_WEIGHT).toFixed(2)} when ranking times.`}
               </div>
             );
           })(),
@@ -850,4 +913,3 @@ export default function AvailabilityGrid(props: Props) {
     </div>
   );
 }
-

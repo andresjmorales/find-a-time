@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import "./globals.css";
 import logo from "./icon.png";
 
@@ -18,7 +19,7 @@ export default function RootLayout({
       <body className="bg-slate-50 min-h-screen font-sans antialiased">
         <header className="bg-white/90 backdrop-blur border-b border-slate-200 sticky top-0 z-20">
           <div className="max-w-4xl mx-auto px-4 py-3 flex justify-center">
-            <a
+            <Link
               href="/"
               className="flex items-center gap-2 text-lg font-bold text-violet-600 hover:text-violet-700 transition-colors"
             >
@@ -31,7 +32,7 @@ export default function RootLayout({
                 aria-hidden
               />
               Let’s Find a Time!
-            </a>
+            </Link>
           </div>
         </header>
         <main className="max-w-4xl mx-auto px-4 py-6 sm:py-8">{children}</main>

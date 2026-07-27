@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useMemo as useReactMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
 import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 import { EventWithAvailability } from "@/lib/types";
 import { getTimezoneOptions, getTimezoneShortName, formatSlotLabelInTimezone, formatSlotTimeWithAbbrev } from "@/lib/timezones";
 import { availabilityColors, getUnavailableTextUnselectedHex } from "@/lib/availabilityColors";
 import { getSlotScoreValue, DEFAULT_IF_NEEDED_WEIGHT } from "@/lib/scoring";
+import { isEventExpired, shouldHideResults } from "@/lib/eventTime";
 
 function getDefaultTimezone(): string {
   if (typeof Intl !== "undefined" && Intl.DateTimeFormat) {
@@ -148,16 +150,10 @@ export default function EventPage() {
   // When event loads and is expired or results hidden, default to results tab
   useEffect(() => {
     if (!event) return;
-    const exp = event.expiresAt
-      ? new Date(
-          event.expiresAt.includes("T") ? event.expiresAt : event.expiresAt + "T23:59:59"
-        )
-      : null;
-    const expired = !!exp && new Date() > exp;
-    const hideRes =
-      !!event.hideResultsUntilExpiration && !!exp && !expired;
-    if (expired || hideRes) setTab("results");
-  }, [event?.id, event?.expiresAt, event?.hideResultsUntilExpiration]);
+    if (isEventExpired(event) || shouldHideResults(event)) setTab("results");
+    // Intentionally key off event identity/options, not the whole object (availability updates shouldn't flip tabs).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
+  }, [event?.id, event?.expiresAt, event?.hideResultsUntilExpiration, event?.eventTimezone]);
   const timezoneOptions = useMemo(() => {
     const opts = getTimezoneOptions(timezone);
     if (!timezone) return [{ value: "", label: "Your time zone…" }, ...opts];
@@ -167,11 +163,20 @@ export default function EventPage() {
   const fetchEvent = useCallback(async () => {
     try {
       const res = await fetch(`/api/events/${id}`);
-      if (!res.ok) throw new Error("Event not found");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 503) {
+          throw new Error(
+            (data.error as string) ||
+              "Storage unavailable. Please try again later."
+          );
+        }
+        throw new Error((data.error as string) || "Event not found");
+      }
       const data = await res.json();
       setEvent(data);
-    } catch {
-      setError("Event not found");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Event not found");
     } finally {
       setLoading(false);
     }
@@ -193,6 +198,8 @@ export default function EventPage() {
       const q = next.toString();
       router.replace(q ? `${pathname}?${q}` : pathname);
     }
+    // Run once on mount only — re-running would fight user timezone changes / strip again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only TZ bootstrap
   }, []);
 
   // Keep tab title in sync when event loads (e.g. after client fetch)
@@ -205,7 +212,7 @@ export default function EventPage() {
     };
   }, [event?.name]);
 
-  const topSlots = useReactMemo(
+  const topSlots = useMemo(
     () => (event ? computeTopSlots(event, timezone) : []),
     [event, timezone]
   );
@@ -254,7 +261,9 @@ export default function EventPage() {
   }
 
   function copyLink() {
-    navigator.clipboard.writeText(window.location.href);
+    // Share a clean event URL (no leftover query params like ?tz=).
+    const url = `${window.location.origin}${pathname}`;
+    navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -269,22 +278,17 @@ export default function EventPage() {
     return (
       <div className="text-center py-20">
         <p className="text-red-500 mb-4">{error}</p>
-        <a href="/" className="text-violet-600 hover:underline">
+        <Link href="/" className="text-violet-600 hover:underline">
           Let’s Find a Time!
-        </a>
+        </Link>
       </div>
     );
   }
 
   if (!event) return null;
 
-  const now = new Date();
-  const expiresAtDate = event.expiresAt
-    ? new Date(event.expiresAt.includes("T") ? event.expiresAt : event.expiresAt + "T23:59:59")
-    : null;
-  const isExpired = !!expiresAtDate && now > expiresAtDate;
-  const hideResults =
-    !!event.hideResultsUntilExpiration && !!expiresAtDate && !isExpired;
+  const isExpired = isEventExpired(event);
+  const hideResults = shouldHideResults(event);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -438,10 +442,15 @@ export default function EventPage() {
                   setSlotsIfNeeded(ifNeeded);
                 }}
                 mode="input"
-                othersAvailability={event.availability.map((a) => ({
-                  slots: a.slots,
-                  slotsIfNeeded: a.slotsIfNeeded,
-                }))}
+                othersAvailability={
+                  // Don't leak group results via the input overlay when results are hidden.
+                  hideResults
+                    ? []
+                    : event.availability.map((a) => ({
+                        slots: a.slots,
+                        slotsIfNeeded: a.slotsIfNeeded,
+                      }))
+                }
                 disableIfNeeded={event.disableIfNeeded}
                 ifNeededWeight={event.ifNeededWeight}
               />

@@ -62,6 +62,8 @@ export function getTimezoneShortName(value: string): string {
   return value;
 }
 
+import { zonedDateTimeToUtc } from "./eventTime";
+
 /**
  * Get the UTC Date that corresponds to (dateStr, hour, half) interpreted in eventTimezone.
  * Used to convert creator's grid times to viewer's timezone for display.
@@ -73,42 +75,7 @@ export function getSlotUtcDate(
   eventTimezone: string
 ): Date {
   const minute = half === 0 ? 0 : 30;
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const formatter = new Intl.DateTimeFormat("en", {
-    timeZone: eventTimezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "numeric",
-    hour12: false,
-    minute: "2-digit",
-  });
-  const targetMonth = String(m).padStart(2, "0");
-  const targetDay = String(d).padStart(2, "0");
-  const targetHour = hour;
-  const targetMin = minute;
-  const startUtc = Date.UTC(y, m - 1, d, hour - 12, minute, 0);
-  const endUtc = Date.UTC(y, m - 1, d, hour + 12, minute, 0);
-  for (let t = startUtc; t <= endUtc; t += 15 * 60 * 1000) {
-    const date = new Date(t);
-    const parts = formatter.formatToParts(date);
-    const get = (type: string) =>
-      parts.find((p) => p.type === type)?.value ?? "";
-    const month = get("month");
-    const day = get("day");
-    const h = parseInt(get("hour"), 10);
-    const min = parseInt(get("minute"), 10);
-    if (
-      get("year") === String(y) &&
-      month === targetMonth &&
-      day === targetDay &&
-      h === targetHour &&
-      min === targetMin
-    ) {
-      return date;
-    }
-  }
-  return new Date(Date.UTC(y, m - 1, d, hour, minute, 0));
+  return zonedDateTimeToUtc(dateStr, hour, minute, eventTimezone);
 }
 
 /**

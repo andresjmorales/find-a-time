@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 interface DatePickerProps {
   selectedDates: string[];
@@ -26,25 +26,30 @@ function getTodayStr(): string {
   return formatDate(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
+function subscribeToCalendarDay(onStoreChange: () => void): () => void {
+  const onVisible = () => onStoreChange();
+  document.addEventListener("visibilitychange", onVisible);
+  // Re-check periodically in case the tab stays open past midnight.
+  const id = window.setInterval(onStoreChange, 60_000);
+  return () => {
+    document.removeEventListener("visibilitychange", onVisible);
+    window.clearInterval(id);
+  };
+}
+
 export default function DatePicker({
   selectedDates,
   onDatesChange,
   maxDates,
 }: DatePickerProps) {
-  // Don't use server/build date: initial "" so we set "today" only on the client in useEffect.
-  // Otherwise SSR or static build can bake in server timezone (e.g. UTC), so "yesterday" stays selectable for users ahead of server.
-  const [todayStr, setTodayStr] = useState("");
+  // Client-only "today" so SSR/build never bakes in a server timezone date.
+  const todayStr = useSyncExternalStore(
+    subscribeToCalendarDay,
+    getTodayStr,
+    () => ""
+  );
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
-
-  useEffect(() => {
-    setTodayStr(getTodayStr());
-  }, []);
-  useEffect(() => {
-    const onVisible = () => setTodayStr(getTodayStr());
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, []);
 
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDay = getFirstDayOfMonth(viewYear, viewMonth);
