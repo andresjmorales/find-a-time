@@ -11,6 +11,7 @@
 </p>
 
 <p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/andresjmorales/find-a-time?color=blue" alt="License: MIT"></a>
   <a href="https://github.com/andresjmorales/find-a-time/commits/main"><img src="https://img.shields.io/github/last-commit/andresjmorales/find-a-time" alt="Last commit"></a>
   <a href="https://github.com/andresjmorales/find-a-time/stargazers"><img src="https://img.shields.io/github/stars/andresjmorales/find-a-time?style=flat" alt="GitHub stars"></a>
   <a href="https://find-a-time.app"><img src="https://img.shields.io/website?url=https%3A%2F%2Ffind-a-time.app&label=find-a-time.app" alt="find-a-time.app status"></a>
@@ -104,3 +105,7 @@ If those env vars are missing, the app will return an error and the UI will show
 
 - [Next.js Documentation](https://nextjs.org/docs)
 - [Learn Next.js](https://nextjs.org/learn)
+
+## License
+
+[MIT](LICENSE)
