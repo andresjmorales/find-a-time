@@ -1,6 +1,38 @@
-# Let’s Find a Time!
+<p align="center">
+  <a href="https://find-a-time.app">
+    <img src="./src/app/icon.png" alt="Let’s Find a Time logo" width="128" height="128">
+  </a>
+</p>
 
-**Create a link, share it, and see when everyone can meet.** A lightweight scheduling poll: pick dates and hours, share the event URL, and respondents mark slots as **Great**, **If needed**, or **Unavailable**. The app scores slots and surfaces the best times.
+<h1 align="center">Let’s Find a Time!</h1>
+
+<p align="center">
+  Create a link, share it, and see when everyone can meet.
+</p>
+
+<p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/andresjmorales/find-a-time?color=blue" alt="License: MIT"></a>
+  <a href="https://github.com/andresjmorales/find-a-time/commits/main"><img src="https://img.shields.io/github/last-commit/andresjmorales/find-a-time" alt="Last commit"></a>
+  <a href="https://github.com/andresjmorales/find-a-time/stargazers"><img src="https://img.shields.io/github/stars/andresjmorales/find-a-time?style=flat" alt="GitHub stars"></a>
+  <a href="https://find-a-time.app"><img src="https://img.shields.io/website?url=https%3A%2F%2Ffind-a-time.app&label=find-a-time.app" alt="find-a-time.app status"></a>
+  <br>
+  <img src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white" alt="Next.js 16">
+  <img src="https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white" alt="React 19">
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Tailwind%20CSS-4-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4">
+  <img src="https://img.shields.io/badge/Upstash%20Redis-00E9A3?logo=upstash&logoColor=white" alt="Upstash Redis">
+  <a href="#deploy-on-vercel"><img src="https://img.shields.io/badge/Deploy-Vercel-000000?logo=vercel&logoColor=white" alt="Deploy on Vercel"></a>
+  <a href="https://buymeacoffee.com/andresjmorales"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
+</p>
+
+<p align="center">
+  <a href="https://find-a-time.app"><b>Try it</b></a> ·
+  <a href="#how-it-works"><b>How it works</b></a> ·
+  <a href="#screenshots-on-mobile-browser"><b>Screenshots</b></a> ·
+  <a href="#getting-started"><b>Run locally</b></a>
+</p>
+
+A lightweight scheduling poll: pick dates and hours, share the event URL, and respondents mark slots as **Great**, **If needed**, or **Unavailable**. The app scores slots and surfaces the best times.
 
 ## How it works
 
@@ -73,3 +105,7 @@ If those env vars are missing, the app will return an error and the UI will show
 
 - [Next.js Documentation](https://nextjs.org/docs)
 - [Learn Next.js](https://nextjs.org/learn)
+
+## License
+
+[MIT](LICENSE)
